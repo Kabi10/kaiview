@@ -1,4 +1,6 @@
 import asyncio
+import importlib
+import importlib.resources
 import json
 import re
 import shlex
@@ -19,38 +21,96 @@ import uvicorn
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 
-if sys.version_info >= (3, 11):
-    import tomllib
-else:
-    try:
-        import tomllib
-    except ImportError:
-        import tomli as tomllib  # type: ignore
-
 # ── Config ────────────────────────────────────────────────────────────────────
 
-_CFG_FILE = Path(__file__).parent / "config.toml"
+_KAIVIEW_DIR = Path.home() / ".kaiview"
+_CFG_FILE    = _KAIVIEW_DIR / "config.toml"
 
-def _load_cfg() -> dict:
-    if _CFG_FILE.exists():
+
+def _build_default_config() -> dict:
+    if sys.version_info >= (3, 11):
+        import tomllib as _tl
+    else:
         try:
-            return tomllib.loads(_CFG_FILE.read_text(encoding="utf-8"))
-        except Exception as e:
-            print(f"config.toml parse error: {e}")
-    return {}
+            import tomllib as _tl
+        except ImportError:
+            import tomli as _tl  # type: ignore
+    text = importlib.resources.files("kaiview").joinpath("config_template.toml").read_text()
+    return _tl.loads(text)
 
-CFG        = _load_cfg()
-DEV_DIR    = Path(CFG.get("kaiview", {}).get("dev_dir", "C:/Dev"))
-DB_PATH    = Path(__file__).parent / "kaiview.db"
-HTML_FILE  = Path(__file__).parent / "index.html"
-SCHEMA_VER = 3
-GITHUB_TOKEN = CFG.get("github", {}).get("token", "")
+
+def _load_config_from(path: Path) -> dict:
+    if sys.version_info >= (3, 11):
+        import tomllib as _tl
+    else:
+        try:
+            import tomllib as _tl
+        except ImportError:
+            import tomli as _tl  # type: ignore
+    try:
+        return _tl.loads(path.read_text(encoding="utf-8"))
+    except Exception as e:
+        print(f"[kaiview] config.toml parse error: {e} — using defaults")
+        return _build_default_config()
+
+
+def _migrate_config_keys(cfg: dict) -> dict:
+    """Migrate old key structure to new on first load of an existing config."""
+    # [kaiview] → [projects]
+    if "kaiview" in cfg and "projects" not in cfg:
+        cfg["projects"] = cfg.pop("kaiview")
+    # github.token → github.pat
+    if "github" in cfg and "token" in cfg["github"] and "pat" not in cfg["github"]:
+        cfg["github"]["pat"] = cfg["github"].pop("token")
+    return cfg
+
+
+def _ensure_config() -> dict:
+    _KAIVIEW_DIR.mkdir(parents=True, exist_ok=True)
+    if not _CFG_FILE.exists():
+        template_bytes = importlib.resources.files("kaiview").joinpath("config_template.toml").read_bytes()
+        _CFG_FILE.write_bytes(template_bytes)
+        print(f"[kaiview] Created default config at {_CFG_FILE}")
+
+    # DB migration: copy old kaiview.db from package dir if new location is empty
+    new_db = _KAIVIEW_DIR / "kaiview.db"
+    if not new_db.exists():
+        import importlib.util as _imp_util
+        pkg_spec = _imp_util.find_spec("kaiview")
+        if pkg_spec and pkg_spec.origin:
+            old_db = Path(pkg_spec.origin).parent / "kaiview.db"
+            if old_db.exists():
+                import shutil
+                shutil.copy2(old_db, new_db)
+                print(f"[kaiview] Migrated database from {old_db} to {new_db}")
+
+    return _migrate_config_keys(_load_config_from(_CFG_FILE))
+
+
+CFG = _ensure_config()
+
+
+def _dev_dir() -> Path:
+    raw = CFG.get("projects", {}).get("dev_dir", "~")
+    return Path(raw).expanduser().resolve()
+
+
+def _skip_set() -> set:
+    return set(CFG.get("projects", {}).get("skip", [
+        ".git", "node_modules", "__pycache__", ".venv", "venv"
+    ]))
+
+
+DEV_DIR      = _dev_dir()
+SKIP         = _skip_set()
+DB_PATH      = _KAIVIEW_DIR / "kaiview.db"
+SCHEMA_VER   = 3
+GITHUB_TOKEN = CFG.get("github", {}).get("pat", "")
 HEALTH_CFG   = CFG.get("health", {})
 
-SKIP = set(CFG.get("kaiview", {}).get("skip", [
-    "kaiview", "manager", ".claude", "__pycache__", "node_modules",
-    ".git", "null", "shared", "tools", "chorus", "AI Convo"
-]))
+# Read HTML into memory at startup. importlib.resources.files() returns a Traversable,
+# NOT a filesystem Path in installed wheels. Always read the content directly.
+_HTML_CONTENT: str = importlib.resources.files("kaiview").joinpath("index.html").read_text(encoding="utf-8")
 
 app = FastAPI(title="KaiView")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
@@ -678,7 +738,7 @@ async def startup():
     # Real-time watchdog (filesystem events) + slow fallback poll
     asyncio.to_thread(_start_watchdog)
     asyncio.create_task(git_watcher())
-    port = CFG.get("kaiview", {}).get("port", 3737)
+    port = CFG.get("server", {}).get("port", 3737)
     print(f"KaiView running at http://localhost:{port}")
 
 
@@ -686,7 +746,7 @@ async def startup():
 
 @app.get("/", response_class=HTMLResponse)
 def root():
-    return HTML_FILE.read_text(encoding="utf-8")
+    return _HTML_CONTENT
 
 
 def _scan_dir() -> list[Path]:
