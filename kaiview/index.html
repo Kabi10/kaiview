@@ -363,6 +363,9 @@ body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;font-
     <button class="tb-view-btn" id="vbtn-kanban" onclick="setMainView('kanban',this)">⬛ Kanban</button>
     <span id="refreshed" style="font-size:11px;color:var(--dimmer);white-space:nowrap"></span>
     <button id="refresh-btn" onclick="loadProjects()" title="Refresh (R)">↻</button>
+    <button id="settings-btn" onclick="openSettings()" title="Settings"
+      style="background:none;border:none;cursor:pointer;font-size:1.1rem;
+             padding:4px 8px;opacity:0.65;color:inherit;" aria-label="Open settings">⚙</button>
   </div>
   <div id="grid-area" style="flex:1;overflow-y:auto;padding:16px 18px">
     <div id="grid-root"><div class="proj-grid"><div class="loading"><div class="loader"></div><span>Loading projects…</span></div></div></div>
@@ -1225,6 +1228,217 @@ document.getElementById('cmd-overlay').addEventListener('click', e=>{
 // ── Boot ───────────────────────────────────────────────────────────
 connectWS();
 loadProjects();
+</script>
+
+<!-- ── Settings Modal ─────────────────────────────────────────── -->
+<div id="settings-overlay"
+     style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.55);
+            z-index:900;align-items:center;justify-content:center;">
+  <div style="background:var(--card-bg,#1e1e1e);border:1px solid var(--border,#2e2e2e);
+              border-radius:12px;padding:28px 32px;width:540px;max-height:85vh;
+              overflow-y:auto;position:relative;box-shadow:0 20px 60px rgba(0,0,0,.4);">
+    <button onclick="closeSettings()"
+            style="position:absolute;top:14px;right:18px;background:none;border:none;
+                   cursor:pointer;font-size:1.1rem;opacity:0.6;color:inherit;">✕</button>
+    <h2 style="margin:0 0 22px;font-size:1rem;font-weight:600;letter-spacing:.02em;">Settings</h2>
+
+    <!-- Projects -->
+    <section style="margin-bottom:18px;">
+      <h3 style="font-size:.8rem;opacity:.5;text-transform:uppercase;letter-spacing:.08em;
+                 margin:0 0 10px;">Projects</h3>
+      <label style="display:block;margin-bottom:12px;">
+        <span style="font-size:.85rem;display:block;margin-bottom:5px;">Projects folder</span>
+        <input id="s-devdir" type="text" placeholder="~/projects"
+               style="width:100%;box-sizing:border-box;padding:9px 12px;
+                      background:var(--input-bg,#252525);border:1px solid var(--border,#2e2e2e);
+                      border-radius:7px;color:inherit;font-size:.9rem;font-family:inherit;">
+        <span id="s-devdir-err" style="display:none;color:#f87171;font-size:.78rem;margin-top:4px;"></span>
+      </label>
+      <label style="display:block;">
+        <span style="font-size:.85rem;display:block;margin-bottom:5px;">Skip folders (comma-separated)</span>
+        <input id="s-skip" type="text" placeholder=".git, node_modules, __pycache__"
+               style="width:100%;box-sizing:border-box;padding:9px 12px;
+                      background:var(--input-bg,#252525);border:1px solid var(--border,#2e2e2e);
+                      border-radius:7px;color:inherit;font-size:.9rem;font-family:inherit;">
+      </label>
+    </section>
+
+    <!-- GitHub -->
+    <section style="margin-bottom:18px;">
+      <h3 style="font-size:.8rem;opacity:.5;text-transform:uppercase;letter-spacing:.08em;
+                 margin:0 0 10px;">GitHub</h3>
+      <label style="display:block;">
+        <span style="font-size:.85rem;display:block;margin-bottom:5px;">
+          Personal Access Token
+          <a href="https://github.com/settings/tokens" target="_blank"
+             style="font-size:.75rem;opacity:.5;margin-left:8px;color:inherit;">Create →</a>
+        </span>
+        <!-- PAT field: if masked, shows placeholder. Clear entirely to remove PAT, type new value to replace. -->
+        <input id="s-pat" type="password" placeholder="ghp_... (blank to remove)"
+               style="width:100%;box-sizing:border-box;padding:9px 12px;
+                      background:var(--input-bg,#252525);border:1px solid var(--border,#2e2e2e);
+                      border-radius:7px;color:inherit;font-size:.9rem;font-family:monospace;">
+      </label>
+    </section>
+
+    <!-- Server -->
+    <section style="margin-bottom:18px;">
+      <h3 style="font-size:.8rem;opacity:.5;text-transform:uppercase;letter-spacing:.08em;
+                 margin:0 0 10px;">Server</h3>
+      <label style="display:flex;align-items:center;gap:12px;">
+        <span style="font-size:.85rem;">Port</span>
+        <input id="s-port" type="number" min="1024" max="65535"
+               style="width:110px;padding:9px 12px;background:var(--input-bg,#252525);
+                      border:1px solid var(--border,#2e2e2e);border-radius:7px;
+                      color:inherit;font-size:.9rem;font-family:inherit;">
+      </label>
+      <div id="s-port-warn"
+           style="display:none;margin-top:10px;padding:9px 13px;
+                  background:rgba(217,119,6,.1);border:1px solid rgba(217,119,6,.4);
+                  border-radius:7px;font-size:.8rem;color:#d97706;">
+        ⚠ Changing the port requires restarting kaiview
+      </div>
+    </section>
+
+    <!-- Health Weights -->
+    <section style="margin-bottom:24px;">
+      <h3 style="font-size:.8rem;opacity:.5;text-transform:uppercase;letter-spacing:.08em;
+                 margin:0 0 10px;">Health Score Weights</h3>
+      <div id="s-weights-err"
+           style="display:none;color:#f87171;font-size:.78rem;margin-bottom:8px;">
+        Weights must sum to 100 — current total: <strong id="s-wsum">0</strong>
+      </div>
+      <div id="s-sliders"></div>
+    </section>
+
+    <div style="display:flex;gap:10px;justify-content:flex-end;align-items:center;">
+      <span id="s-toast" style="display:none;font-size:.82rem;padding:6px 14px;
+                                 border-radius:6px;"></span>
+      <button onclick="closeSettings()"
+              style="padding:8px 18px;background:none;border:1px solid var(--border,#2e2e2e);
+                     border-radius:7px;cursor:pointer;color:inherit;font-size:.88rem;">Cancel</button>
+      <button id="s-save" onclick="saveSettings()"
+              style="padding:8px 20px;background:#2563eb;border:none;border-radius:7px;
+                     cursor:pointer;color:#fff;font-size:.88rem;font-weight:500;">Save</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── Settings ────────────────────────────────────────────────────────────────
+(function () {
+  const WEIGHT_KEYS   = ['commit_weight','dirty_weight','readme_weight','description_weight'];
+  const WEIGHT_LABELS = {
+    commit_weight: 'Commit staleness', dirty_weight: 'Dirty files',
+    readme_weight: 'Has README',       description_weight: 'Has description',
+  };
+  let _origPort = 3737;
+
+  window.openSettings = async function () {
+    const r = await fetch('/api/settings');
+    const d = await r.json();
+    _origPort = d.port;
+    document.getElementById('s-devdir').value = d.dev_dir || '';
+    document.getElementById('s-skip').value   = (d.skip || []).join(', ');
+    // If PAT is masked: show hint placeholder, keep field showing __MASKED__ as value.
+    // User can clear the field entirely to delete the PAT, or type a new value to replace it.
+    const patField = document.getElementById('s-pat');
+    patField.value = d.github_pat || '';
+    if (d.github_pat === '__MASKED__') {
+      patField.placeholder = 'PAT saved — clear to remove, or type to replace';
+    } else {
+      patField.placeholder = 'ghp_... (blank to remove)';
+    }
+    document.getElementById('s-port').value    = d.port;
+    document.getElementById('s-port-warn').style.display = 'none';
+    document.getElementById('s-devdir-err').style.display = 'none';
+
+    const box = document.getElementById('s-sliders');
+    box.innerHTML = '';
+    for (const k of WEIGHT_KEYS) {
+      const v = (d.health || {})[k] ?? 25;
+      box.insertAdjacentHTML('beforeend', `
+        <label style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
+          <span style="font-size:.83rem;min-width:135px;opacity:.8;">${WEIGHT_LABELS[k]}</span>
+          <input type="range" min="0" max="100" value="${v}" id="hw-${k}"
+                 oninput="_syncWeights()" style="flex:1;accent-color:#2563eb;">
+          <span id="hwv-${k}" style="min-width:26px;text-align:right;font-size:.83rem;">${v}</span>
+        </label>`);
+    }
+    _syncWeights();
+
+    const overlay = document.getElementById('settings-overlay');
+    overlay.style.display = 'flex';
+    document.addEventListener('keydown', _escHandler);
+  };
+
+  window._syncWeights = function () {
+    let sum = 0;
+    for (const k of WEIGHT_KEYS) {
+      const v = parseInt(document.getElementById('hw-' + k)?.value ?? 0);
+      const lbl = document.getElementById('hwv-' + k);
+      if (lbl) lbl.textContent = v;
+      sum += v;
+    }
+    document.getElementById('s-wsum').textContent = sum;
+    const bad = sum !== 100;
+    document.getElementById('s-weights-err').style.display = bad ? 'block' : 'none';
+    const btn = document.getElementById('s-save');
+    btn.disabled    = bad;
+    btn.style.opacity = bad ? '0.45' : '1';
+  };
+
+  document.getElementById('s-port')?.addEventListener('input', function () {
+    document.getElementById('s-port-warn').style.display =
+      parseInt(this.value) !== _origPort ? 'block' : 'none';
+  });
+
+  function _escHandler(e) { if (e.key === 'Escape') closeSettings(); }
+
+  window.closeSettings = function () {
+    document.getElementById('settings-overlay').style.display = 'none';
+    document.removeEventListener('keydown', _escHandler);
+  };
+
+  // Close on overlay backdrop click
+  document.getElementById('settings-overlay')?.addEventListener('click', function (e) {
+    if (e.target === this) closeSettings();
+  });
+
+  window.saveSettings = async function () {
+    document.getElementById('s-devdir-err').style.display = 'none';
+    const health = {};
+    for (const k of WEIGHT_KEYS) health[k] = parseInt(document.getElementById('hw-' + k).value);
+    const body = {
+      dev_dir:    document.getElementById('s-devdir').value.trim(),
+      skip:       document.getElementById('s-skip').value.split(',').map(s => s.trim()).filter(Boolean),
+      github_pat: document.getElementById('s-pat').value,
+      port:       parseInt(document.getElementById('s-port').value),
+      health,
+    };
+    const r    = await fetch('/api/settings', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body) });
+    const data = await r.json();
+    if (!r.ok) {
+      if (data.code === 'dev_dir_not_found') {
+        const el = document.getElementById('s-devdir-err');
+        el.textContent = data.error; el.style.display = 'block';
+      }
+      return;
+    }
+    const toast = document.getElementById('s-toast');
+    if (data.restart_required) {
+      toast.style.background = 'rgba(217,119,6,.2)';
+      toast.style.color = '#d97706';
+      toast.textContent = `Restart kaiview to apply port ${data.new_port}`;
+    } else {
+      toast.style.background = 'rgba(34,197,94,.15)';
+      toast.style.color = '#22c55e';
+      toast.textContent = 'Settings saved';
+    }
+    toast.style.display = 'block';
+    setTimeout(() => { toast.style.display = 'none'; }, 3000);
+  };
+})();
 </script>
 </body>
 </html>
