@@ -1,27 +1,56 @@
 import asyncio
 import json
+import re
 import shlex
 import subprocess
+import sys
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
 import aiosqlite
+import httpx
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import uvicorn
+from watchdog.observers import Observer
+from watchdog.events import FileSystemEventHandler
 
-DEV_DIR    = Path("C:/Dev")
+if sys.version_info >= (3, 11):
+    import tomllib
+else:
+    try:
+        import tomllib
+    except ImportError:
+        import tomli as tomllib  # type: ignore
+
+# ── Config ────────────────────────────────────────────────────────────────────
+
+_CFG_FILE = Path(__file__).parent / "config.toml"
+
+def _load_cfg() -> dict:
+    if _CFG_FILE.exists():
+        try:
+            return tomllib.loads(_CFG_FILE.read_text(encoding="utf-8"))
+        except Exception as e:
+            print(f"config.toml parse error: {e}")
+    return {}
+
+CFG        = _load_cfg()
+DEV_DIR    = Path(CFG.get("kaiview", {}).get("dev_dir", "C:/Dev"))
 DB_PATH    = Path(__file__).parent / "kaiview.db"
 HTML_FILE  = Path(__file__).parent / "index.html"
-SCHEMA_VER = 2
+SCHEMA_VER = 3
+GITHUB_TOKEN = CFG.get("github", {}).get("token", "")
+HEALTH_CFG   = CFG.get("health", {})
 
-SKIP = {
+SKIP = set(CFG.get("kaiview", {}).get("skip", [
     "kaiview", "manager", ".claude", "__pycache__", "node_modules",
     ".git", "null", "shared", "tools", "chorus", "AI Convo"
-}
+]))
 
 app = FastAPI(title="KaiView")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
@@ -342,40 +371,31 @@ def get_sparkline(path: Path, days: int = 7) -> list[int]:
 # ── Health score ──────────────────────────────────────────────────────────────
 
 def compute_health(path: Path, git: dict, stack: list, meta: dict) -> int:
-    """Compute 0-100 health score. Higher = healthier."""
-    score = 100
-    days  = git.get("days_since_commit", 999)
+    """Compute 0-100 health score using config.toml weights."""
+    h   = HEALTH_CFG
+    score  = 100
+    days   = git.get("days_since_commit", 999)
     status = meta.get("status", "Active")
 
     if status in ("Paused", "Archived"):
         return 50  # neutral — intentionally inactive
 
-    # Git freshness
-    if days > 60:    score -= 35
-    elif days > 30:  score -= 20
-    elif days > 14:  score -= 10
-    elif days > 7:   score -= 5
+    stale_h = h.get("stale_high",   30);  pen_h = h.get("penalty_stale_high",   35)
+    stale_m = h.get("stale_medium", 14);  pen_m = h.get("penalty_stale_medium", 20)
+    stale_l = h.get("stale_low",     7);  pen_l = h.get("penalty_stale_low",    10)
+    pen_w   = h.get("penalty_stale_week",   5)
 
-    # Dirty working tree
-    if git.get("dirty"):
-        score -= 10
+    if days > stale_h * 2: score -= pen_h
+    elif days > stale_h:   score -= pen_m
+    elif days > stale_m:   score -= pen_l
+    elif days > stale_l:   score -= pen_w
 
-    # Has README
-    has_readme = any((path / n).exists() for n in ["README.md", "readme.md"])
-    if not has_readme:
-        score -= 10
-
-    # Has git
-    if not git.get("is_git"):
-        score -= 20
-
-    # Has description
-    if not meta.get("description"):
-        score -= 5
-
-    # Has current task (actively managed)
-    if meta.get("current_task"):
-        score += 5
+    if git.get("dirty"):                                    score -= h.get("penalty_dirty",    10)
+    if not any((path / n).exists() for n in ["README.md", "readme.md"]):
+                                                            score -= h.get("penalty_no_readme", 10)
+    if not git.get("is_git"):                               score -= h.get("penalty_no_git",   20)
+    if not meta.get("description"):                         score -= h.get("penalty_no_desc",   5)
+    if meta.get("current_task"):                            score += h.get("bonus_has_task",    5)
 
     return max(0, min(100, score))
 
@@ -412,6 +432,97 @@ def detect_start_command(path: Path, stack: list) -> str:
     if "build.gradle.kts" in files:
         return "./gradlew run"
     return ""
+
+
+# ── GitHub integration ────────────────────────────────────────────────────────
+
+_gh_cache: dict[str, tuple[float, dict]] = {}   # name -> (ts, data)
+_GH_TTL   = 300                                  # 5-minute cache
+
+def _parse_github_remote(path: Path) -> tuple[str, str] | None:
+    """Return (owner, repo) if origin remote is a GitHub URL, else None."""
+    try:
+        url = subprocess.check_output(
+            ["git", "remote", "get-url", "origin"],
+            cwd=str(path), stderr=subprocess.DEVNULL, text=True, timeout=5
+        ).strip()
+    except Exception:
+        return None
+
+    # https://github.com/owner/repo.git  or  git@github.com:owner/repo.git
+    m = re.search(r"github\.com[:/]([^/]+)/([^/\s]+?)(?:\.git)?$", url)
+    if m:
+        return m.group(1), m.group(2)
+    return None
+
+
+async def fetch_github_data(path: Path, name: str) -> dict:
+    """Fetch GitHub repo stats (cached, TTL 5 min)."""
+    ts, cached = _gh_cache.get(name, (0.0, {}))
+    if time.monotonic() - ts < _GH_TTL and cached:
+        return cached
+
+    info = await asyncio.to_thread(_parse_github_remote, path)
+    if not info:
+        return {}
+
+    owner, repo = info
+    headers = {"Accept": "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28"}
+    if GITHUB_TOKEN:
+        headers["Authorization"] = f"Bearer {GITHUB_TOKEN}"
+
+    result: dict = {"owner": owner, "repo": repo, "url": f"https://github.com/{owner}/{repo}"}
+    try:
+        async with httpx.AsyncClient(timeout=8) as client:
+            # Repo metadata
+            r = await client.get(f"https://api.github.com/repos/{owner}/{repo}", headers=headers)
+            if r.status_code == 200:
+                d = r.json()
+                result.update({
+                    "stars":       d.get("stargazers_count", 0),
+                    "forks":       d.get("forks_count", 0),
+                    "open_issues": d.get("open_issues_count", 0),
+                    "language":    d.get("language", ""),
+                    "visibility":  d.get("visibility", "public"),
+                    "default_branch": d.get("default_branch", "main"),
+                })
+
+            # Open PRs
+            pr = await client.get(
+                f"https://api.github.com/repos/{owner}/{repo}/pulls",
+                params={"state": "open", "per_page": 1},
+                headers={**headers, "Accept": "application/vnd.github+json"}
+            )
+            if pr.status_code == 200:
+                # GitHub returns Link header for total count; use list length as minimum
+                result["open_prs"] = len(pr.json())
+                link = pr.headers.get("Link", "")
+                m2 = re.search(r'page=(\d+)>; rel="last"', link)
+                if m2:
+                    result["open_prs"] = int(m2.group(1))
+
+            # Latest CI run
+            ci = await client.get(
+                f"https://api.github.com/repos/{owner}/{repo}/actions/runs",
+                params={"per_page": 1},
+                headers=headers
+            )
+            if ci.status_code == 200:
+                runs = ci.json().get("workflow_runs", [])
+                if runs:
+                    run = runs[0]
+                    result["ci"] = {
+                        "status":     run.get("status"),
+                        "conclusion": run.get("conclusion"),
+                        "name":       run.get("name"),
+                        "url":        run.get("html_url"),
+                        "updated_at": run.get("updated_at"),
+                    }
+    except Exception as e:
+        result["error"] = str(e)
+
+    _gh_cache[name] = (time.monotonic(), result)
+    return result
 
 
 # ── Running processes registry ────────────────────────────────────────────────
@@ -487,20 +598,68 @@ async def broadcast(data: dict):
         ws_clients.remove(ws)
 
 
-async def _collect_git_updates() -> list[dict]:
-    items = await asyncio.to_thread(_scan_dir)
-    updates = []
-    for item in items:
-        git = await asyncio.to_thread(get_git_info, item)
-        if git.get("is_git"):
-            updates.append({"name": item.name, "git": git})
-    return updates
+# ── Watchdog git watcher ──────────────────────────────────────────────────────
+
+_LOOP: asyncio.AbstractEventLoop | None = None
 
 
+class _GitEventHandler(FileSystemEventHandler):
+    """Fires when a .git/logs/HEAD or COMMIT_EDITMSG changes."""
+
+    def __init__(self, project_name: str):
+        super().__init__()
+        self.project_name = project_name
+        self._last = 0.0
+
+    def on_modified(self, event):
+        src = str(event.src_path).replace("\\", "/")
+        if not any(k in src for k in ("logs/HEAD", "COMMIT_EDITMSG", "index")):
+            return
+        now = time.monotonic()
+        if now - self._last < 2:        # debounce 2s
+            return
+        self._last = now
+        if _LOOP:
+            asyncio.run_coroutine_threadsafe(
+                _broadcast_git_change(self.project_name), _LOOP
+            )
+
+
+async def _broadcast_git_change(name: str):
+    path = DEV_DIR / name
+    git  = await asyncio.to_thread(get_git_info, path)
+    if git.get("is_git") and ws_clients:
+        await broadcast({
+            "type":         "git_update",
+            "projects":     [{"name": name, "git": git}],
+            "refreshed_at": datetime.now().isoformat(),
+        })
+
+
+def _start_watchdog():
+    """Start a watchdog Observer for every git project (runs in background thread)."""
+    observer = Observer()
+    for item in DEV_DIR.iterdir():
+        if not item.is_dir() or item.name in SKIP or item.name.startswith("."):
+            continue
+        git_dir = item / ".git"
+        if git_dir.is_dir():
+            handler = _GitEventHandler(item.name)
+            observer.schedule(handler, str(git_dir), recursive=True)
+    observer.start()
+    return observer
+
+
+# Fallback: keep a slow background poll so newly-created repos are picked up
 async def git_watcher():
     while True:
-        await asyncio.sleep(60)
-        updates = await _collect_git_updates()
+        await asyncio.sleep(300)        # 5-min fallback (watchdog handles real-time)
+        items = await asyncio.to_thread(_scan_dir)
+        updates = []
+        for item in items:
+            git = await asyncio.to_thread(get_git_info, item)
+            if git.get("is_git"):
+                updates.append({"name": item.name, "git": git})
         if updates and ws_clients:
             await broadcast({
                 "type":         "git_update",
@@ -513,9 +672,14 @@ async def git_watcher():
 
 @app.on_event("startup")
 async def startup():
+    global _LOOP
+    _LOOP = asyncio.get_event_loop()
     await init_db()
+    # Real-time watchdog (filesystem events) + slow fallback poll
+    asyncio.to_thread(_start_watchdog)
     asyncio.create_task(git_watcher())
-    print("KaiView running at http://localhost:3737")
+    port = CFG.get("kaiview", {}).get("port", 3737)
+    print(f"KaiView running at http://localhost:{port}")
 
 
 # ── Routes ────────────────────────────────────────────────────────────────────
@@ -697,6 +861,16 @@ def scan_deps(name: str):
 
     result["total"] = len(result["deps"])
     return result
+
+
+@app.get("/api/projects/{name}/github")
+async def github_data(name: str):
+    """Return cached GitHub stats (stars, forks, open PRs, CI status)."""
+    path = DEV_DIR / name
+    if not path.exists():
+        raise HTTPException(404)
+    data = await fetch_github_data(path, name)
+    return data
 
 
 @app.get("/api/projects/{name}/git")

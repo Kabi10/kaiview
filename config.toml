@@ -1,0 +1,29 @@
+[kaiview]
+dev_dir = "C:/Dev"
+port    = 3737
+skip    = [
+  "kaiview", "manager", ".claude", "__pycache__", "node_modules",
+  ".git", "null", "shared", "tools", "chorus", "AI Convo"
+]
+
+[github]
+# Optional personal access token (classic) with public_repo scope
+# Raises rate limit from 60 to 5000 requests/hour
+token = ""
+
+[health]
+# Staleness thresholds (days since last commit)
+stale_high   = 30
+stale_medium = 14
+stale_low    = 7
+
+# Deduction weights (subtracted from 100)
+penalty_stale_high   = 35
+penalty_stale_medium = 20
+penalty_stale_low    = 10
+penalty_stale_week   = 5
+penalty_dirty        = 10
+penalty_no_readme    = 10
+penalty_no_git       = 20
+penalty_no_desc      = 5
+bonus_has_task       = 5
