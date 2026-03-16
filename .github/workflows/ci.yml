@@ -1,0 +1,29 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  lint-and-import:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Check imports and syntax
+        run: python -c "import server; print('server.py imports OK')"
+
+      - name: Lint with ruff (non-blocking)
+        run: |
+          pip install ruff
+          ruff check server.py --select E,W --ignore E501 || true
