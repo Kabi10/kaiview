@@ -1,5 +1,6 @@
 import asyncio
 import json
+import shlex
 import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
@@ -421,22 +422,25 @@ running_processes: dict[str, subprocess.Popen] = {}
 # ── Build project payload ─────────────────────────────────────────────────────
 
 async def build_project(item: Path) -> dict:
-    meta         = await db_get_project(item.name)
-    stack        = detect_stack(item)
-    git          = get_git_info(item)
+    # DB read (async) + all blocking I/O in thread pool — run in parallel
+    meta, stack, git = await asyncio.gather(
+        db_get_project(item.name),
+        asyncio.to_thread(detect_stack, item),
+        asyncio.to_thread(get_git_info, item),
+    )
     days         = git.get("days_since_commit", 999)
     status       = meta.get("status", "Active")
     dirty        = git.get("dirty", False)
     current_task = meta.get("current_task", "")
 
-    description = meta.get("description", "") or get_readme_desc(item) or "No description yet."
+    description = meta.get("description", "") or await asyncio.to_thread(get_readme_desc, item) or "No description yet."
     category    = meta.get("category") or auto_category(item.name, stack)
     staleness   = compute_staleness(days, status, dirty)
     lens        = compute_lens(days, status, dirty, current_task)
 
-    sparkline     = get_sparkline(item) if git.get("is_git") else [0] * 7
+    sparkline     = await asyncio.to_thread(get_sparkline, item) if git.get("is_git") else [0] * 7
     health        = compute_health(item, git, stack, {**meta, "status": status, "description": description})
-    start_command = detect_start_command(item, stack)
+    start_command = await asyncio.to_thread(detect_start_command, item, stack)
     is_running    = item.name in running_processes and running_processes[item.name].poll() is None
 
     return {
@@ -483,16 +487,20 @@ async def broadcast(data: dict):
         ws_clients.remove(ws)
 
 
+async def _collect_git_updates() -> list[dict]:
+    items = await asyncio.to_thread(_scan_dir)
+    updates = []
+    for item in items:
+        git = await asyncio.to_thread(get_git_info, item)
+        if git.get("is_git"):
+            updates.append({"name": item.name, "git": git})
+    return updates
+
+
 async def git_watcher():
     while True:
         await asyncio.sleep(60)
-        updates = []
-        for item in DEV_DIR.iterdir():
-            if not item.is_dir() or item.name in SKIP or item.name.startswith("."):
-                continue
-            git = get_git_info(item)
-            if git.get("is_git"):
-                updates.append({"name": item.name, "git": git})
+        updates = await _collect_git_updates()
         if updates and ws_clients:
             await broadcast({
                 "type":         "git_update",
@@ -517,13 +525,19 @@ def root():
     return HTML_FILE.read_text(encoding="utf-8")
 
 
+def _scan_dir() -> list[Path]:
+    """Synchronous filesystem scan — called via asyncio.to_thread."""
+    return sorted(
+        p for p in DEV_DIR.iterdir()
+        if p.is_dir() and p.name not in SKIP and not p.name.startswith(".")
+    )
+
+
 @app.get("/api/projects")
 async def list_projects():
-    projects = []
-    for item in sorted(DEV_DIR.iterdir()):
-        if not item.is_dir() or item.name in SKIP or item.name.startswith("."):
-            continue
-        projects.append(await build_project(item))
+    items    = await asyncio.to_thread(_scan_dir)
+    # Build all projects in parallel — each awaits its own thread-pool calls
+    projects = list(await asyncio.gather(*[build_project(item) for item in items]))
     projects.sort(key=lambda x: (not x["pinned"], x["name"].lower()))
     return projects
 
@@ -554,8 +568,9 @@ async def resume_project(name: str):
         )
         await db.commit()
     try:
-        subprocess.Popen(f'code "{path}"', shell=True)
-    except: pass
+        subprocess.Popen(["code", str(path)], shell=False)
+    except Exception:
+        pass
 
     meta   = await db_get_project(name)
     ai_ctx = ""
@@ -602,7 +617,7 @@ def open_vscode(name: str):
     path = DEV_DIR / name
     if not path.exists():
         raise HTTPException(404)
-    subprocess.Popen(f'code "{path}"', shell=True)
+    subprocess.Popen(["code", str(path)], shell=False)
     return {"ok": True}
 
 
@@ -627,8 +642,9 @@ async def launch_project(name: str):
         raise HTTPException(400, "No start command detected for this project")
 
     try:
+        args = shlex.split(cmd)   # safe tokenization — no shell=True
         proc = subprocess.Popen(
-            cmd, shell=True, cwd=str(path),
+            args, cwd=str(path), shell=False,
             stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
             text=True
         )
