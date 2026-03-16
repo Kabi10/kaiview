@@ -54,6 +54,10 @@ class ParkRequest(BaseModel):
     next_action:  str = ""
     blockers:     str = ""
 
+class JournalEntry(BaseModel):
+    body: str
+    mood: str = "note"  # note | win | blocker | idea
+
 
 # ── Database ──────────────────────────────────────────────────────────────────
 
@@ -103,6 +107,13 @@ async def init_db():
                 model         TEXT DEFAULT '',
                 topic         TEXT DEFAULT '',
                 outcome       TEXT DEFAULT ''
+            );
+            CREATE TABLE IF NOT EXISTS journal (
+                id            INTEGER PRIMARY KEY AUTOINCREMENT,
+                project_name  TEXT NOT NULL,
+                logged_at     TEXT NOT NULL,
+                body          TEXT NOT NULL,
+                mood          TEXT DEFAULT 'note'
             );
         """)
 
@@ -700,6 +711,60 @@ async def get_sessions(name: str):
             (name,)
         )).fetchall()
         return [dict(r) for r in rows]
+
+
+@app.get("/api/projects/{name}/journal")
+async def get_journal(name: str):
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        rows = await (await db.execute(
+            "SELECT * FROM journal WHERE project_name=? ORDER BY logged_at DESC LIMIT 50",
+            (name,)
+        )).fetchall()
+        return [dict(r) for r in rows]
+
+
+@app.post("/api/projects/{name}/journal")
+async def add_journal(name: str, entry: JournalEntry):
+    if not entry.body.strip():
+        raise HTTPException(400, "Journal entry cannot be empty")
+    now = datetime.now(timezone.utc).isoformat()
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute(
+            "INSERT INTO journal (project_name, logged_at, body, mood) VALUES (?,?,?,?)",
+            (name, now, entry.body.strip(), entry.mood)
+        )
+        await db.commit()
+    return {"ok": True}
+
+
+@app.delete("/api/journal/{entry_id}")
+async def delete_journal(entry_id: int):
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute("DELETE FROM journal WHERE id=?", (entry_id,))
+        await db.commit()
+    return {"ok": True}
+
+
+@app.get("/api/search")
+async def search_all(q: str = ""):
+    """Full-text search across project name, description, notes, current_task, ai_context."""
+    if not q or len(q.strip()) < 2:
+        return []
+    term = q.strip().lower()
+    results = []
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        rows = await (await db.execute("""
+            SELECT name, description, current_task, notes, ai_context_snippet, status, category
+            FROM projects
+            WHERE lower(name) LIKE ? OR lower(description) LIKE ? OR lower(current_task) LIKE ?
+               OR lower(notes) LIKE ? OR lower(ai_context_snippet) LIKE ?
+            LIMIT 20
+        """, (f"%{term}%",)*5)).fetchall()
+        for r in rows:
+            results.append(dict(r))
+    return results
 
 
 @app.get("/api/stats")
