@@ -6,7 +6,9 @@ import re
 import shlex
 import subprocess
 import sys
+import threading
 import time
+import webbrowser
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
@@ -1041,5 +1043,21 @@ async def websocket_endpoint(ws: WebSocket):
             ws_clients.remove(ws)
 
 
+def main():
+    """Entry point for `kaiview` CLI command."""
+    port = CFG.get("server", {}).get("port", 3737)
+
+    def _open_browser():
+        import time
+        time.sleep(1.2)
+        try:
+            webbrowser.open(f"http://localhost:{port}")
+        except Exception:
+            pass  # silently skip on headless/CI
+
+    threading.Thread(target=_open_browser, daemon=True).start()
+    uvicorn.run("kaiview.server:app", host="127.0.0.1", port=port, log_level="warning")
+
+
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=3737, reload=False)
+    main()

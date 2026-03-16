@@ -1,4 +1,5 @@
 import importlib.resources
+import inspect
 import sys
 
 if sys.version_info >= (3, 11):
@@ -21,3 +22,12 @@ def test_config_template_is_bundled():
 def test_index_html_is_bundled():
     text = importlib.resources.files("kaiview").joinpath("index.html").read_text(encoding="utf-8")
     assert "<html" in text.lower()
+
+
+def test_main_is_callable_with_no_required_args():
+    from kaiview.server import main
+    assert callable(main)
+    sig = inspect.signature(main)
+    required = [p for p in sig.parameters.values()
+                if p.default is inspect.Parameter.empty]
+    assert len(required) == 0
