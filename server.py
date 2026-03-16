@@ -300,6 +300,113 @@ def get_readme_desc(path: Path) -> str:
     return ""
 
 
+# ── Sparkline ────────────────────────────────────────────────────────────────
+
+def get_sparkline(path: Path, days: int = 7) -> list[int]:
+    """Return commit counts per day for the last N days (index 0 = oldest)."""
+    try:
+        since = f"{days} days ago"
+        raw = subprocess.check_output(
+            ["git", "log", f"--since={since}", "--format=%ct"],
+            cwd=str(path), stderr=subprocess.DEVNULL, text=True, timeout=8
+        ).strip()
+        if not raw:
+            return [0] * days
+
+        now_ts = int(datetime.now(timezone.utc).timestamp())
+        buckets = [0] * days
+        for line in raw.splitlines():
+            try:
+                ts  = int(line.strip())
+                day = int((now_ts - ts) / 86400)
+                if 0 <= day < days:
+                    buckets[days - 1 - day] += 1
+            except: pass
+        return buckets
+    except:
+        return [0] * days
+
+
+# ── Health score ──────────────────────────────────────────────────────────────
+
+def compute_health(path: Path, git: dict, stack: list, meta: dict) -> int:
+    """Compute 0-100 health score. Higher = healthier."""
+    score = 100
+    days  = git.get("days_since_commit", 999)
+    status = meta.get("status", "Active")
+
+    if status in ("Paused", "Archived"):
+        return 50  # neutral — intentionally inactive
+
+    # Git freshness
+    if days > 60:    score -= 35
+    elif days > 30:  score -= 20
+    elif days > 14:  score -= 10
+    elif days > 7:   score -= 5
+
+    # Dirty working tree
+    if git.get("dirty"):
+        score -= 10
+
+    # Has README
+    has_readme = any((path / n).exists() for n in ["README.md", "readme.md"])
+    if not has_readme:
+        score -= 10
+
+    # Has git
+    if not git.get("is_git"):
+        score -= 20
+
+    # Has description
+    if not meta.get("description"):
+        score -= 5
+
+    # Has current task (actively managed)
+    if meta.get("current_task"):
+        score += 5
+
+    return max(0, min(100, score))
+
+
+# ── Detect start command ──────────────────────────────────────────────────────
+
+def detect_start_command(path: Path, stack: list) -> str:
+    """Auto-detect the best command to start this project's dev environment."""
+    files = {f.name for f in path.iterdir() if f.is_file()} if path.exists() else set()
+
+    if "Makefile" in files:
+        return "make dev"
+    if "docker-compose.yml" in files:
+        return "docker-compose up"
+    if "package.json" in files:
+        try:
+            pkg      = json.loads((path / "package.json").read_text())
+            scripts  = pkg.get("scripts", {})
+            for s in ["dev", "start", "serve"]:
+                if s in scripts:
+                    return f"npm run {s}"
+        except: pass
+        return "npm start"
+    if "bot.py" in files:
+        return "python bot.py"
+    if "main.py" in files:
+        return "python main.py"
+    if "server.py" in files:
+        return "python server.py"
+    if "manage.py" in files:
+        return "python manage.py runserver"
+    if "requirements.txt" in files:
+        return "python main.py"
+    if "build.gradle.kts" in files:
+        return "./gradlew run"
+    return ""
+
+
+# ── Running processes registry ────────────────────────────────────────────────
+
+running_processes: dict[str, subprocess.Popen] = {}
+
+
 # ── Build project payload ─────────────────────────────────────────────────────
 
 async def build_project(item: Path) -> dict:
@@ -315,6 +422,11 @@ async def build_project(item: Path) -> dict:
     category    = meta.get("category") or auto_category(item.name, stack)
     staleness   = compute_staleness(days, status, dirty)
     lens        = compute_lens(days, status, dirty, current_task)
+
+    sparkline     = get_sparkline(item) if git.get("is_git") else [0] * 7
+    health        = compute_health(item, git, stack, {**meta, "status": status, "description": description})
+    start_command = detect_start_command(item, stack)
+    is_running    = item.name in running_processes and running_processes[item.name].poll() is None
 
     return {
         "name":               item.name,
@@ -340,6 +452,10 @@ async def build_project(item: Path) -> dict:
         "git":                git,
         "staleness":          staleness,
         "lens":               lens,
+        "sparkline":          sparkline,
+        "health":             health,
+        "start_command":      start_command,
+        "is_running":         is_running,
     }
 
 
@@ -477,6 +593,83 @@ def open_vscode(name: str):
         raise HTTPException(404)
     subprocess.Popen(f'code "{path}"', shell=True)
     return {"ok": True}
+
+
+@app.post("/api/projects/{name}/launch")
+async def launch_project(name: str):
+    """Start the project's dev environment in a terminal."""
+    path = DEV_DIR / name
+    if not path.exists():
+        raise HTTPException(404)
+
+    # Kill if already running
+    if name in running_processes:
+        proc = running_processes[name]
+        if proc.poll() is None:
+            proc.terminate()
+            del running_processes[name]
+            return {"ok": True, "action": "stopped", "is_running": False}
+
+    stack   = detect_stack(path)
+    cmd     = detect_start_command(path, stack)
+    if not cmd:
+        raise HTTPException(400, "No start command detected for this project")
+
+    try:
+        proc = subprocess.Popen(
+            cmd, shell=True, cwd=str(path),
+            stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+            text=True
+        )
+        running_processes[name] = proc
+        return {"ok": True, "action": "started", "is_running": True, "command": cmd}
+    except Exception as e:
+        raise HTTPException(500, str(e))
+
+
+@app.get("/api/projects/{name}/deps")
+def scan_deps(name: str):
+    """Scan dependency files and return a summary."""
+    path = DEV_DIR / name
+    if not path.exists():
+        raise HTTPException(404)
+
+    result: dict = {"name": name, "deps": [], "warnings": []}
+
+    # Python
+    req = path / "requirements.txt"
+    if req.exists():
+        lines = [l.strip() for l in req.read_text(errors="ignore").splitlines()
+                 if l.strip() and not l.startswith("#")]
+        result["deps"].extend({"file": "requirements.txt", "pkg": l} for l in lines[:30])
+
+    pyproject = path / "pyproject.toml"
+    if pyproject.exists():
+        result["deps"].append({"file": "pyproject.toml", "pkg": "(see file)"})
+
+    # Node
+    pkg_json = path / "package.json"
+    if pkg_json.exists():
+        try:
+            pkg  = json.loads(pkg_json.read_text())
+            deps = {**pkg.get("dependencies", {}), **pkg.get("devDependencies", {})}
+            for k, v in list(deps.items())[:30]:
+                result["deps"].append({"file": "package.json", "pkg": f"{k}@{v}"})
+        except:
+            result["warnings"].append("Could not parse package.json")
+
+    # Gradle
+    gradle = path / "app" / "build.gradle.kts"
+    if not gradle.exists():
+        gradle = path / "build.gradle.kts"
+    if gradle.exists():
+        text = gradle.read_text(errors="ignore")
+        import re
+        for m in re.findall(r'implementation\s*["\']([^"\']+)["\']', text)[:20]:
+            result["deps"].append({"file": "build.gradle.kts", "pkg": m})
+
+    result["total"] = len(result["deps"])
+    return result
 
 
 @app.get("/api/projects/{name}/git")

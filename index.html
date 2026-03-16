@@ -194,6 +194,30 @@ body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;font-
 .gm{color:var(--yellow)}
 .gd{color:var(--red)}
 
+/* ── Sparkline ── */
+.sparkline{display:flex;align-items:flex-end;gap:2px;height:22px;padding:0 1px}
+.spark-bar{flex:1;min-width:3px;border-radius:2px 2px 0 0;background:var(--border2);transition:background .2s}
+.spark-bar.has-commits{background:var(--accent)}
+
+/* ── Health score ── */
+.health-row{display:flex;align-items:center;gap:6px;font-size:10px}
+.health-bar{flex:1;height:4px;border-radius:2px;background:var(--s3);overflow:hidden}
+.health-fill{height:100%;border-radius:2px;transition:width .4s}
+.health-lbl{font-size:10px;font-weight:600;white-space:nowrap}
+
+/* ── Launch button ── */
+.act-btn.launch{background:#052e16;border-color:#166534;color:var(--green)}
+.act-btn.launch:hover{background:#166534;color:#fff}
+.act-btn.launch.running{background:#7f1d1d;border-color:#dc2626;color:#fca5a5}
+.act-btn.launch.running:hover{background:#dc2626;color:#fff}
+
+/* ── Deps modal ── */
+.dep-row{display:flex;align-items:baseline;gap:8px;padding:4px 8px;border-radius:4px;font-size:11px;border-bottom:1px solid var(--border)}
+.dep-row:last-child{border-bottom:none}
+.dep-file{color:var(--cyan);font-family:'JetBrains Mono',monospace;font-size:10px;min-width:90px;flex-shrink:0}
+.dep-pkg{color:var(--text);font-family:'JetBrains Mono',monospace;word-break:break-all}
+.deps-block{background:var(--s2);border:1px solid var(--border);border-radius:var(--rs);max-height:280px;overflow-y:auto}
+
 /* ── Loading / Empty ── */
 .loading{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:50px;color:var(--dim);gap:10px;font-size:13px;grid-column:1/-1}
 .loader{width:28px;height:28px;border:3px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite}
@@ -370,6 +394,16 @@ body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;font-
 </div>
 </div>
 
+<!-- ── DEPS MODAL ── -->
+<div class="overlay" id="deps-ov">
+<div class="modal">
+  <div class="modal-hdr"><h2>📦 Dependencies — <span id="deps-title"></span></h2><button class="modal-close" onclick="closeModal('deps-ov')">✕</button></div>
+  <p style="font-size:11px;color:var(--dim);margin-bottom:12px">Scanned from requirements.txt, package.json, build.gradle.kts</p>
+  <div class="deps-block" id="deps-list"><div style="padding:12px;color:var(--dim)">Loading…</div></div>
+  <div style="font-size:11px;color:var(--dimmer);margin-top:8px" id="deps-count"></div>
+</div>
+</div>
+
 <div id="toast"></div>
 
 <script>
@@ -527,12 +561,32 @@ function renderAll(){
   }
 }
 
+function buildSparkline(arr){
+  if(!arr||!arr.length) return '';
+  const max = Math.max(...arr,1);
+  const bars = arr.map(v=>{
+    const h = Math.round((v/max)*100);
+    return `<div class="spark-bar ${v>0?'has-commits':''}" style="height:${Math.max(h,8)}%" title="${v} commit${v!==1?'s':''}"></div>`;
+  }).join('');
+  return `<div class="sparkline" title="7-day commit activity">${bars}</div>`;
+}
+
+function healthColor(h){
+  if(h>=80) return 'var(--green)';
+  if(h>=55) return 'var(--yellow)';
+  if(h>=35) return 'var(--orange)';
+  return 'var(--red)';
+}
+
 function buildCard(p){
   const icon   = CAT_ICON[p.category]||'📦';
   const aiIcon = AI_ICON[p.ai_assigned]||'⚪';
   const aiLbl  = p.ai_assigned||'None';
   const sl     = staleLevel(p.staleness);
   const sc_    = staleColor(p.staleness);
+  const h      = p.health ?? 100;
+  const hc     = healthColor(h);
+  const nameEsc = esc(p.name);
 
   let focusHtml = '';
   if(p.current_task){
@@ -547,9 +601,10 @@ function buildCard(p){
   const g = p.git;
   if(g&&g.is_git){
     const dirty = g.dirty?`<span class="git-dirty">⬤ ${g.changes} change${g.changes!==1?'s':''}</span>`:`<span class="git-clean">⬤ clean</span>`;
-    gitHtml=`<div class="card-git" onclick="openGitModal('${esc(p.name)}')" title="Git details">
+    gitHtml=`<div class="card-git" onclick="openGitModal('${nameEsc}')" title="Git details">
       <span class="git-branch">⎇ ${esc(g.branch)}</span>${dirty}
       <span class="git-time">${esc(g.commit_time||'')}</span>
+      ${buildSparkline(p.sparkline)}
     </div>`;
   } else {
     gitHtml=`<div class="card-git" style="color:var(--dimmer)">⚠ No git</div>`;
@@ -557,11 +612,15 @@ function buildCard(p){
 
   const tags = (p.stack||[]).slice(0,4).map(s=>`<span class="tag">${esc(s)}</span>`).join('');
 
+  const launchCls = p.is_running ? 'launch running' : 'launch';
+  const launchLbl = p.is_running ? '⏹ Stop' : '▶ Run';
+  const launchTitle = p.start_command ? `${p.is_running?'Stop':'Run'}: ${p.start_command}` : 'No start command detected';
+
   return `<div class="card${p.pinned?' pinned':''}" data-stale="${sl}">
     <div class="card-header">
       <div class="card-icon">${icon}</div>
       <div class="card-title-area">
-        <div class="card-name" title="${esc(p.name)}">${esc(p.name)}</div>
+        <div class="card-name" title="${nameEsc}">${nameEsc}</div>
         <div class="card-desc" title="${esc(p.description)}">${esc(p.description)}</div>
       </div>
     </div>
@@ -571,14 +630,19 @@ function buildCard(p){
       <span class="badge ${ac(p.ai_assigned)}">${aiIcon} ${esc(aiLbl)}</span>
     </div>
     <div style="display:flex;flex-wrap:wrap;gap:3px">${tags}</div>
+    <div class="health-row" title="Project health: ${h}/100">
+      <div class="health-bar"><div class="health-fill" style="width:${h}%;background:${hc}"></div></div>
+      <span class="health-lbl" style="color:${hc}">${h}</span>
+    </div>
     ${focusHtml}
     <div class="stale-bar"><div class="stale-fill" style="width:${p.staleness}%;background:${sc_}"></div></div>
     ${gitHtml}
     <div class="card-actions">
-      <button class="act-btn resume" onclick="openResumeModal('${esc(p.name)}')">▶ Resume</button>
-      <button class="act-btn park"   onclick="openParkModal('${esc(p.name)}')">⏸ Park</button>
-      <button class="act-btn"        onclick="openGitModal('${esc(p.name)}')">⎇</button>
-      <button class="act-btn primary" onclick="openEditModal('${esc(p.name)}')">✏</button>
+      <button class="act-btn resume" onclick="openResumeModal('${nameEsc}')">▶ Resume</button>
+      <button class="act-btn park"   onclick="openParkModal('${nameEsc}')">⏸ Park</button>
+      <button class="act-btn ${launchCls}" onclick="launchProject('${nameEsc}')" title="${esc(launchTitle)}" ${!p.start_command&&!p.is_running?'disabled style="opacity:.4;cursor:default"':''}>${launchLbl}</button>
+      <button class="act-btn"        onclick="openDepsModal('${nameEsc}')">📦</button>
+      <button class="act-btn primary" onclick="openEditModal('${nameEsc}')">✏</button>
     </div>
   </div>`;
 }
@@ -729,6 +793,46 @@ function toast(msg,type='ok'){
 function esc(s){
   if(!s) return '';
   return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ── Launch ─────────────────────────────────────────────────────────
+async function launchProject(name){
+  try{
+    const res  = await fetch(`${API}/api/projects/${encodeURIComponent(name)}/launch`,{method:'POST'});
+    const data = await res.json();
+    const p = allProjects.find(x=>x.name===name);
+    if(p){ p.is_running = data.is_running; }
+    renderAll();
+    const msg = data.action==='started'
+      ? `Started: ${data.command||name}`
+      : `Stopped ${name}`;
+    toast(msg, data.action==='started'?'ok':'err');
+  } catch(e){
+    toast('Launch failed: '+e.message,'err');
+  }
+}
+
+// ── Deps ───────────────────────────────────────────────────────────
+async function openDepsModal(name){
+  document.getElementById('deps-title').textContent = name;
+  document.getElementById('deps-list').innerHTML = '<div style="padding:12px;color:var(--dim)">Loading…</div>';
+  document.getElementById('deps-count').textContent = '';
+  document.getElementById('deps-ov').classList.add('open');
+  try{
+    const res  = await fetch(`${API}/api/projects/${encodeURIComponent(name)}/deps`);
+    const data = await res.json();
+    if(!data.deps||!data.deps.length){
+      document.getElementById('deps-list').innerHTML='<div style="padding:12px;color:var(--dim)">No dependency files found.</div>';
+    } else {
+      document.getElementById('deps-list').innerHTML = data.deps.map(d=>
+        `<div class="dep-row"><span class="dep-file">${esc(d.file)}</span><span class="dep-pkg">${esc(d.pkg)}</span></div>`
+      ).join('');
+      document.getElementById('deps-count').textContent = `${data.total} dependencies found`;
+    }
+    if(data.warnings&&data.warnings.length){
+      document.getElementById('deps-count').textContent += ' · ⚠ '+data.warnings.join(', ');
+    }
+  } catch(e){ document.getElementById('deps-list').innerHTML='<div style="padding:12px;color:var(--red)">Error loading deps.</div>'; }
 }
 
 // ── Keyboard ───────────────────────────────────────────────────────
