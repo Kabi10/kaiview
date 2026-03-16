@@ -1,1022 +1,748 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Dev Manager</title>
-<link rel="preconnect" href="https://fonts.googleapis.com" />
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>KaiView</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
 <style>
-  :root {
-    --bg:       #0b0b10;
-    --surface:  #13131c;
-    --s2:       #1a1a26;
-    --s3:       #22222f;
-    --border:   #2a2a3e;
-    --border2:  #383850;
-    --text:     #e0e0ec;
-    --dim:      #7777a0;
-    --dimmer:   #444466;
-    --accent:   #7c3aed;
-    --accent-h: #9d5cf6;
-    --cyan:     #06b6d4;
-    --green:    #22c55e;
-    --yellow:   #f59e0b;
-    --red:      #ef4444;
-    --blue:     #3b82f6;
-    --orange:   #f97316;
-    --pink:     #ec4899;
-    --radius:   10px;
-    --radius-sm:6px;
-  }
+:root {
+  --bg:      #0b0b10;
+  --sur:     #13131c;
+  --s2:      #1a1a26;
+  --s3:      #22222f;
+  --border:  #2a2a3e;
+  --border2: #383850;
+  --text:    #e0e0ec;
+  --dim:     #7777a0;
+  --dimmer:  #444466;
+  --accent:  #7c3aed;
+  --acch:    #9d5cf6;
+  --cyan:    #06b6d4;
+  --green:   #22c55e;
+  --yellow:  #f59e0b;
+  --red:     #ef4444;
+  --blue:    #3b82f6;
+  --orange:  #f97316;
+  --r:       10px;
+  --rs:      6px;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;font-size:14px;display:flex;height:100vh;overflow:hidden}
 
-  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+/* ── Sidebar ── */
+#sidebar{width:220px;min-width:220px;background:var(--sur);border-right:1px solid var(--border);display:flex;flex-direction:column;overflow-y:auto}
+.sb-logo{padding:18px 16px 12px;border-bottom:1px solid var(--border)}
+.sb-logo h1{font-size:16px;font-weight:700;letter-spacing:-.3px}
+.sb-logo h1 span{color:var(--accent)}
+.sb-logo p{font-size:11px;color:var(--dim);margin-top:2px}
+.live-dot{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--green);margin-left:6px;animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+.sb-sec{padding:12px 10px 4px}
+.sb-lbl{font-size:10px;font-weight:600;letter-spacing:1px;color:var(--dimmer);text-transform:uppercase;padding:0 6px;margin-bottom:5px}
+.sb-btn{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:var(--rs);cursor:pointer;color:var(--dim);font-size:12.5px;transition:all .15s;user-select:none;border:none;background:none;width:100%;text-align:left}
+.sb-btn:hover{background:var(--s2);color:var(--text)}
+.sb-btn.active{background:var(--s3);color:var(--text)}
+.sb-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+.sb-cnt{margin-left:auto;font-size:11px;background:var(--s3);color:var(--dim);padding:1px 6px;border-radius:20px;min-width:20px;text-align:center}
+.sb-btn.active .sb-cnt{background:var(--accent);color:#fff}
 
-  body {
-    background: var(--bg);
-    color: var(--text);
-    font-family: 'Inter', sans-serif;
-    font-size: 14px;
-    display: flex;
-    height: 100vh;
-    overflow: hidden;
-  }
+/* ── Main ── */
+#main{flex:1;display:flex;flex-direction:column;overflow:hidden}
 
-  /* ── Sidebar ─────────────────────────────────────────── */
-  #sidebar {
-    width: 220px;
-    min-width: 220px;
-    background: var(--surface);
-    border-right: 1px solid var(--border);
-    display: flex;
-    flex-direction: column;
-    padding: 0;
-    overflow-y: auto;
-  }
+/* ── Topbar ── */
+#topbar{background:var(--sur);border-bottom:1px solid var(--border);padding:10px 18px;display:flex;align-items:center;gap:10px;flex-shrink:0}
+#search{flex:1;background:var(--s2);border:1px solid var(--border);border-radius:var(--rs);color:var(--text);font-family:inherit;font-size:13px;padding:7px 12px 7px 34px;outline:none;transition:border .2s;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='13' height='13' fill='%237777a0' viewBox='0 0 16 16'%3E%3Cpath d='M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001l3.85 3.85a1 1 0 0 0 1.415-1.415l-3.85-3.85zm-5.242 1.156a5 5 0 1 1 0-10 5 5 0 0 1 0 10z'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:11px center}
+#search:focus{border-color:var(--accent)}
+#search::placeholder{color:var(--dim)}
+.tb-stat{background:var(--s2);border:1px solid var(--border);border-radius:var(--rs);padding:5px 10px;font-size:11px;color:var(--dim);white-space:nowrap}
+.tb-stat strong{color:var(--text);font-weight:600}
+#refresh-btn{background:var(--s2);border:1px solid var(--border);border-radius:var(--rs);color:var(--dim);cursor:pointer;padding:6px 10px;font-size:15px;transition:all .15s;line-height:1}
+#refresh-btn:hover{background:var(--s3);color:var(--text)}
+#refresh-btn.spin{animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+#refreshed{font-size:11px;color:var(--dimmer);white-space:nowrap}
 
-  .sb-logo {
-    padding: 20px 18px 14px;
-    border-bottom: 1px solid var(--border);
-  }
-  .sb-logo h1 {
-    font-size: 16px;
-    font-weight: 700;
-    letter-spacing: -0.3px;
-    color: var(--text);
-  }
-  .sb-logo span { color: var(--accent); }
-  .sb-logo p { font-size: 11px; color: var(--dim); margin-top: 2px; }
+/* ── Grid area ── */
+#grid-area{flex:1;overflow-y:auto;padding:16px 18px}
 
-  .sb-section { padding: 14px 12px 6px; }
-  .sb-section-label {
-    font-size: 10px;
-    font-weight: 600;
-    letter-spacing: 1px;
-    color: var(--dimmer);
-    text-transform: uppercase;
-    padding: 0 6px;
-    margin-bottom: 6px;
-  }
+/* ── Lens sections ── */
+.lens-section{margin-bottom:24px}
+.lens-header{display:flex;align-items:center;gap:10px;margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid var(--border)}
+.lens-title{font-size:13px;font-weight:600;letter-spacing:.3px}
+.lens-count{font-size:11px;color:var(--dim);background:var(--s2);border:1px solid var(--border);padding:2px 8px;border-radius:20px}
+.lens-active   .lens-title{color:var(--green)}
+.lens-active   .lens-header{border-color:#166534}
+.lens-needs    .lens-title{color:var(--yellow)}
+.lens-needs    .lens-header{border-color:#92400e}
+.lens-neglected .lens-title{color:var(--red)}
+.lens-neglected .lens-header{border-color:#7f1d1d}
+.lens-other    .lens-title{color:var(--dim)}
 
-  .sb-btn {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 7px 8px;
-    border-radius: var(--radius-sm);
-    cursor: pointer;
-    color: var(--dim);
-    font-size: 13px;
-    transition: all 0.15s;
-    user-select: none;
-    border: none;
-    background: none;
-    width: 100%;
-    text-align: left;
-  }
-  .sb-btn:hover { background: var(--s2); color: var(--text); }
-  .sb-btn.active { background: var(--s3); color: var(--text); }
-  .sb-btn .dot {
-    width: 8px; height: 8px;
-    border-radius: 50%;
-    flex-shrink: 0;
-  }
-  .sb-btn .count {
-    margin-left: auto;
-    font-size: 11px;
-    background: var(--s3);
-    color: var(--dim);
-    padding: 1px 6px;
-    border-radius: 20px;
-    min-width: 20px;
-    text-align: center;
-  }
-  .sb-btn.active .count { background: var(--accent); color: #fff; }
+/* ── Grid ── */
+.proj-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(290px,1fr));gap:12px}
 
-  /* ── Main ────────────────────────────────────────────── */
-  #main {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-  }
+/* ── Card ── */
+.card{background:var(--sur);border:1px solid var(--border);border-radius:var(--r);padding:14px;display:flex;flex-direction:column;gap:9px;transition:border-color .2s,transform .15s;position:relative}
+.card:hover{border-color:var(--border2);transform:translateY(-1px)}
+.card.pinned{border-color:var(--accent)}
+.card.pinned::after{content:'📌';position:absolute;top:9px;right:11px;font-size:12px}
 
-  /* ── Top bar ─────────────────────────────────────────── */
-  #topbar {
-    background: var(--surface);
-    border-bottom: 1px solid var(--border);
-    padding: 12px 20px;
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    flex-shrink: 0;
-  }
+/* staleness border-left */
+.card[data-stale="0"]  {border-left:3px solid var(--green)}
+.card[data-stale="low"]{border-left:3px solid var(--yellow)}
+.card[data-stale="mid"]{border-left:3px solid var(--orange)}
+.card[data-stale="high"]{border-left:3px solid var(--red)}
 
-  #search {
-    flex: 1;
-    background: var(--s2);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-sm);
-    color: var(--text);
-    font-family: inherit;
-    font-size: 13px;
-    padding: 8px 12px 8px 36px;
-    outline: none;
-    transition: border 0.2s;
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' fill='%237777a0' viewBox='0 0 16 16'%3E%3Cpath d='M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001l3.85 3.85a1 1 0 0 0 1.415-1.415l-3.85-3.85zm-5.242 1.156a5 5 0 1 1 0-10 5 5 0 0 1 0 10z'/%3E%3C/svg%3E");
-    background-repeat: no-repeat;
-    background-position: 12px center;
-  }
-  #search:focus { border-color: var(--accent); }
-  #search::placeholder { color: var(--dim); }
+.card-header{display:flex;align-items:flex-start;gap:9px}
+.card-icon{width:34px;height:34px;border-radius:7px;background:var(--s3);display:flex;align-items:center;justify-content:center;font-size:17px;flex-shrink:0}
+.card-title-area{flex:1;min-width:0}
+.card-name{font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-right:18px}
+.card-desc{font-size:11px;color:var(--dim);margin-top:2px;line-height:1.4;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 
-  .topbar-stat {
-    background: var(--s2);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-sm);
-    padding: 6px 12px;
-    font-size: 12px;
-    color: var(--dim);
-    white-space: nowrap;
-  }
-  .topbar-stat strong { color: var(--text); font-weight: 600; }
+/* focus strip */
+.card-focus{background:var(--s2);border:1px solid var(--border);border-radius:var(--rs);padding:6px 9px;font-size:11px;color:var(--text);line-height:1.5}
+.card-focus .focus-label{font-size:10px;color:var(--dim);text-transform:uppercase;letter-spacing:.5px;margin-bottom:2px}
+.card-focus .next{color:var(--cyan);margin-top:3px}
 
-  #refresh-btn {
-    background: var(--s2);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-sm);
-    color: var(--dim);
-    cursor: pointer;
-    padding: 7px 10px;
-    font-size: 15px;
-    transition: all 0.15s;
-  }
-  #refresh-btn:hover { background: var(--s3); color: var(--text); }
-  #refresh-btn.spinning { animation: spin 1s linear infinite; }
-  @keyframes spin { to { transform: rotate(360deg); } }
+/* staleness bar */
+.stale-bar{height:3px;border-radius:2px;background:var(--s3);overflow:hidden;margin-top:1px}
+.stale-fill{height:100%;border-radius:2px;transition:width .3s}
 
-  /* ── Grid ────────────────────────────────────────────── */
-  #grid-area {
-    flex: 1;
-    overflow-y: auto;
-    padding: 18px 20px;
-  }
+.card-badges{display:flex;flex-wrap:wrap;gap:4px}
+.badge{font-size:11px;font-weight:500;padding:2px 7px;border-radius:20px;white-space:nowrap}
+.tag{font-size:11px;font-family:'JetBrains Mono',monospace;padding:2px 6px;border-radius:4px;background:var(--s3);color:var(--dim);border:1px solid var(--border)}
 
-  #grid-info {
-    font-size: 12px;
-    color: var(--dim);
-    margin-bottom: 14px;
-  }
+/* git strip */
+.card-git{display:flex;align-items:center;gap:6px;font-size:11px;font-family:'JetBrains Mono',monospace;color:var(--dim);background:var(--s2);padding:5px 8px;border-radius:var(--rs);border:1px solid var(--border);cursor:pointer}
+.card-git:hover{border-color:var(--border2)}
+.git-branch{color:var(--cyan)}
+.git-dirty{color:var(--yellow)}
+.git-clean{color:var(--green)}
+.git-time{margin-left:auto;font-size:10px}
 
-  #projects-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-    gap: 14px;
-  }
+/* card actions */
+.card-actions{display:flex;gap:5px}
+.act-btn{flex:1;padding:6px 4px;border:1px solid var(--border);border-radius:var(--rs);background:var(--s2);color:var(--dim);font-family:inherit;font-size:11px;cursor:pointer;transition:all .15s;text-align:center}
+.act-btn:hover{background:var(--s3);color:var(--text);border-color:var(--border2)}
+.act-btn.resume{background:#052e16;border-color:#166534;color:var(--green)}
+.act-btn.resume:hover{background:#166534;color:#fff}
+.act-btn.park{background:#422006;border-color:#92400e;color:var(--yellow)}
+.act-btn.park:hover{background:#92400e;color:#fff}
+.act-btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.act-btn.primary:hover{background:var(--acch)}
 
-  /* ── Project Card ────────────────────────────────────── */
-  .card {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    padding: 16px;
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-    transition: border-color 0.2s, transform 0.15s;
-    position: relative;
-    cursor: default;
-  }
-  .card:hover { border-color: var(--border2); transform: translateY(-1px); }
-  .card.pinned { border-color: var(--accent); }
-  .card.pinned::before {
-    content: '📌';
-    position: absolute;
-    top: 10px;
-    right: 12px;
-    font-size: 13px;
-  }
+/* ── Status / Category / AI colours ── */
+.s-Active      {background:#052e16;color:var(--green);border:1px solid #166534}
+.s-InProgress  {background:#1e3a5f;color:var(--blue);border:1px solid #1d4ed8}
+.s-Paused      {background:#422006;color:var(--yellow);border:1px solid #92400e}
+.s-Complete    {background:#1f2937;color:#9ca3af;border:1px solid #374151}
+.s-Archived    {background:#1f0a0a;color:var(--red);border:1px solid #7f1d1d}
+.c-Android     {background:#052e16;color:var(--green);border:1px solid #166534}
+.c-Web         {background:#1e3a5f;color:var(--blue);border:1px solid #1d4ed8}
+.c-Backend     {background:#431407;color:var(--orange);border:1px solid #9a3412}
+.c-FullStack   {background:#2e1065;color:#c4b5fd;border:1px solid #5b21b6}
+.c-Bot         {background:#083344;color:var(--cyan);border:1px solid #0e7490}
+.c-Hardware    {background:#422006;color:var(--yellow);border:1px solid #92400e}
+.c-Python      {background:#1e3a5f;color:#93c5fd;border:1px solid #1e40af}
+.c-Other       {background:#1f2937;color:#9ca3af;border:1px solid #374151}
+.ai-Claude     {background:#2e1065;color:#c4b5fd;border:1px solid #5b21b6}
+.ai-DeepSeek   {background:#083344;color:var(--cyan);border:1px solid #0e7490}
+.ai-Gemini     {background:#1e3a5f;color:#93c5fd;border:1px solid #1e40af}
+.ai-ChatGPT    {background:#052e16;color:var(--green);border:1px solid #166534}
+.ai-Copilot    {background:#1f2937;color:#9ca3af;border:1px solid #374151}
+.ai-None       {background:transparent;color:var(--dimmer);border:1px solid var(--border)}
 
-  .card-header {
-    display: flex;
-    align-items: flex-start;
-    gap: 10px;
-  }
+/* ── Modals ── */
+.overlay{position:fixed;inset:0;background:rgba(0,0,0,.72);backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;z-index:100;opacity:0;pointer-events:none;transition:opacity .2s}
+.overlay.open{opacity:1;pointer-events:all}
+.modal{background:var(--sur);border:1px solid var(--border2);border-radius:14px;padding:22px;width:480px;max-width:95vw;max-height:85vh;overflow-y:auto;transform:scale(.96);transition:transform .2s}
+.overlay.open .modal{transform:scale(1)}
+.modal-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px}
+.modal-hdr h2{font-size:15px;font-weight:600}
+.modal-close{background:var(--s2);border:1px solid var(--border);border-radius:5px;color:var(--dim);cursor:pointer;padding:3px 9px;font-size:15px;line-height:1;transition:all .15s}
+.modal-close:hover{background:var(--s3);color:var(--text)}
+.fg{margin-bottom:14px}
+.fl{display:block;font-size:11px;font-weight:500;color:var(--dim);margin-bottom:5px;text-transform:uppercase;letter-spacing:.5px}
+.fi,.fs,.fta{width:100%;background:var(--s2);border:1px solid var(--border);border-radius:var(--rs);color:var(--text);font-family:inherit;font-size:13px;padding:8px 11px;outline:none;transition:border .2s}
+.fi:focus,.fs:focus,.fta:focus{border-color:var(--accent)}
+.fs option{background:var(--s2)}
+.fta{resize:vertical;min-height:70px;line-height:1.5}
+.frow{display:flex;gap:10px}
+.frow .fg{flex:1}
+.f-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:18px}
+.btn{padding:7px 16px;border-radius:var(--rs);font-family:inherit;font-size:13px;font-weight:500;cursor:pointer;border:1px solid var(--border);transition:all .15s}
+.btn-ghost{background:var(--s2);color:var(--dim)}
+.btn-ghost:hover{background:var(--s3);color:var(--text)}
+.btn-primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.btn-primary:hover{background:var(--acch)}
+.btn-park{background:#422006;border-color:#92400e;color:var(--yellow)}
+.btn-park:hover{background:#92400e;color:#fff}
 
-  .card-icon {
-    width: 36px;
-    height: 36px;
-    border-radius: 8px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 18px;
-    flex-shrink: 0;
-  }
+/* resume modal */
+.resume-card{background:var(--s2);border:1px solid var(--border);border-radius:var(--rs);padding:12px;margin-bottom:14px}
+.resume-card .rc-label{font-size:10px;color:var(--dim);text-transform:uppercase;letter-spacing:.5px;margin-bottom:5px}
+.resume-card .rc-value{font-size:13px;color:var(--text);line-height:1.5}
+.ai-ctx-block{background:var(--s2);border:1px solid var(--border);border-radius:var(--rs);padding:10px;font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--text);white-space:pre-wrap;word-break:break-all;max-height:120px;overflow-y:auto;margin-bottom:8px}
 
-  .card-title-area { flex: 1; min-width: 0; }
-  .card-name {
-    font-size: 14px;
-    font-weight: 600;
-    color: var(--text);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    margin-right: 20px;
-  }
-  .card-desc {
-    font-size: 12px;
-    color: var(--dim);
-    margin-top: 3px;
-    line-height: 1.4;
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
-  }
+/* git modal */
+.git-block{background:var(--s2);border:1px solid var(--border);border-radius:var(--rs);padding:9px 11px;white-space:pre-wrap;word-break:break-all;font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--text);line-height:1.6;max-height:180px;overflow-y:auto}
+.git-sec-lbl{font-size:10px;font-weight:600;color:var(--dim);text-transform:uppercase;letter-spacing:1px;margin:10px 0 5px}
+.gh{color:var(--yellow)}
+.ga{color:var(--green)}
+.gm{color:var(--yellow)}
+.gd{color:var(--red)}
 
-  .card-badges {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 5px;
-  }
+/* ── Loading / Empty ── */
+.loading{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:50px;color:var(--dim);gap:10px;font-size:13px;grid-column:1/-1}
+.loader{width:28px;height:28px;border:3px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite}
+.empty{grid-column:1/-1;text-align:center;padding:40px;color:var(--dim);font-size:13px}
 
-  .badge {
-    font-size: 11px;
-    font-weight: 500;
-    padding: 2px 8px;
-    border-radius: 20px;
-    white-space: nowrap;
-  }
+/* ── Toast ── */
+#toast{position:fixed;bottom:18px;right:18px;background:var(--s3);border:1px solid var(--border2);border-radius:var(--rs);padding:9px 14px;font-size:12px;z-index:200;opacity:0;transform:translateY(8px);transition:all .25s;pointer-events:none}
+#toast.show{opacity:1;transform:translateY(0)}
+#toast.ok{border-left:3px solid var(--green)}
+#toast.err{border-left:3px solid var(--red)}
 
-  /* Stack tags */
-  .tag {
-    font-size: 11px;
-    font-family: 'JetBrains Mono', monospace;
-    padding: 2px 7px;
-    border-radius: 4px;
-    background: var(--s3);
-    color: var(--dim);
-    border: 1px solid var(--border);
-  }
-
-  /* Git info */
-  .card-git {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    font-size: 11px;
-    font-family: 'JetBrains Mono', monospace;
-    color: var(--dim);
-    background: var(--s2);
-    padding: 6px 8px;
-    border-radius: var(--radius-sm);
-    border: 1px solid var(--border);
-  }
-  .git-branch { color: var(--cyan); }
-  .git-dirty { color: var(--yellow); }
-  .git-clean { color: var(--green); }
-  .git-time { margin-left: auto; font-size: 10px; }
-
-  /* AI Badge */
-  .ai-badge {
-    font-size: 11px;
-    font-weight: 600;
-    padding: 3px 9px;
-    border-radius: 20px;
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-  }
-
-  /* Card actions */
-  .card-actions {
-    display: flex;
-    gap: 6px;
-    margin-top: 2px;
-  }
-  .action-btn {
-    flex: 1;
-    padding: 6px;
-    border: 1px solid var(--border);
-    border-radius: var(--radius-sm);
-    background: var(--s2);
-    color: var(--dim);
-    font-family: inherit;
-    font-size: 12px;
-    cursor: pointer;
-    transition: all 0.15s;
-    text-align: center;
-  }
-  .action-btn:hover { background: var(--s3); color: var(--text); border-color: var(--border2); }
-  .action-btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
-  .action-btn.primary:hover { background: var(--accent-h); }
-
-  /* ── Modals ──────────────────────────────────────────── */
-  .modal-overlay {
-    position: fixed;
-    inset: 0;
-    background: rgba(0,0,0,0.7);
-    backdrop-filter: blur(4px);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 100;
-    opacity: 0;
-    pointer-events: none;
-    transition: opacity 0.2s;
-  }
-  .modal-overlay.open { opacity: 1; pointer-events: all; }
-
-  .modal {
-    background: var(--surface);
-    border: 1px solid var(--border2);
-    border-radius: 14px;
-    padding: 24px;
-    width: 500px;
-    max-width: 95vw;
-    max-height: 85vh;
-    overflow-y: auto;
-    transform: scale(0.95);
-    transition: transform 0.2s;
-  }
-  .modal-overlay.open .modal { transform: scale(1); }
-
-  .modal-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    margin-bottom: 20px;
-  }
-  .modal-header h2 { font-size: 16px; font-weight: 600; }
-  .modal-close {
-    background: var(--s2);
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    color: var(--dim);
-    cursor: pointer;
-    padding: 4px 10px;
-    font-size: 16px;
-    line-height: 1;
-    transition: all 0.15s;
-  }
-  .modal-close:hover { background: var(--s3); color: var(--text); }
-
-  .form-group { margin-bottom: 16px; }
-  .form-label {
-    display: block;
-    font-size: 12px;
-    font-weight: 500;
-    color: var(--dim);
-    margin-bottom: 6px;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-  }
-  .form-input, .form-select, .form-textarea {
-    width: 100%;
-    background: var(--s2);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-sm);
-    color: var(--text);
-    font-family: inherit;
-    font-size: 13px;
-    padding: 9px 12px;
-    outline: none;
-    transition: border 0.2s;
-  }
-  .form-input:focus, .form-select:focus, .form-textarea:focus { border-color: var(--accent); }
-  .form-select option { background: var(--s2); }
-  .form-textarea { resize: vertical; min-height: 80px; line-height: 1.5; }
-
-  .form-row { display: flex; gap: 12px; }
-  .form-row .form-group { flex: 1; }
-
-  .form-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 20px; }
-  .btn {
-    padding: 8px 18px;
-    border-radius: var(--radius-sm);
-    font-family: inherit;
-    font-size: 13px;
-    font-weight: 500;
-    cursor: pointer;
-    border: 1px solid var(--border);
-    transition: all 0.15s;
-  }
-  .btn-ghost { background: var(--s2); color: var(--dim); }
-  .btn-ghost:hover { background: var(--s3); color: var(--text); }
-  .btn-primary { background: var(--accent); border-color: var(--accent); color: #fff; }
-  .btn-primary:hover { background: var(--accent-h); }
-
-  /* Git modal */
-  .git-modal-content { font-family: 'JetBrains Mono', monospace; font-size: 12px; }
-  .git-section-title { font-size: 11px; font-weight: 600; color: var(--dim); text-transform: uppercase; letter-spacing: 1px; margin: 12px 0 6px; }
-  .git-block {
-    background: var(--s2);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-sm);
-    padding: 10px 12px;
-    white-space: pre-wrap;
-    word-break: break-all;
-    color: var(--text);
-    line-height: 1.6;
-    max-height: 200px;
-    overflow-y: auto;
-  }
-  .git-block .hash { color: var(--yellow); }
-  .git-block .added { color: var(--green); }
-  .git-block .modified { color: var(--yellow); }
-  .git-block .deleted { color: var(--red); }
-
-  /* ── Status + Category colors ────────────────────────── */
-  .status-Active        { background: #052e16; color: var(--green);  border: 1px solid #166534; }
-  .status-InProgress    { background: #1e3a5f; color: var(--blue);   border: 1px solid #1d4ed8; }
-  .status-Paused        { background: #422006; color: var(--yellow); border: 1px solid #92400e; }
-  .status-Complete      { background: #1f2937; color: #9ca3af;       border: 1px solid #374151; }
-  .status-Archived      { background: #1f0a0a; color: var(--red);    border: 1px solid #7f1d1d; }
-
-  .cat-Android    { background: #052e16; color: var(--green);  border: 1px solid #166534; }
-  .cat-Web        { background: #1e3a5f; color: var(--blue);   border: 1px solid #1d4ed8; }
-  .cat-Backend    { background: #431407; color: var(--orange); border: 1px solid #9a3412; }
-  .cat-FullStack  { background: #2e1065; color: #c4b5fd;       border: 1px solid #5b21b6; }
-  .cat-Bot        { background: #083344; color: var(--cyan);   border: 1px solid #0e7490; }
-  .cat-Hardware   { background: #422006; color: var(--yellow); border: 1px solid #92400e; }
-  .cat-Python     { background: #1e3a5f; color: #93c5fd;       border: 1px solid #1e40af; }
-  .cat-Other      { background: #1f2937; color: #9ca3af;       border: 1px solid #374151; }
-
-  .ai-Claude   { background: #2e1065; color: #c4b5fd; border: 1px solid #5b21b6; }
-  .ai-DeepSeek { background: #083344; color: var(--cyan); border: 1px solid #0e7490; }
-  .ai-Gemini   { background: #1e3a5f; color: #93c5fd; border: 1px solid #1e40af; }
-  .ai-ChatGPT  { background: #052e16; color: var(--green); border: 1px solid #166534; }
-  .ai-Copilot  { background: #1f2937; color: #9ca3af; border: 1px solid #374151; }
-  .ai-None     { background: transparent; color: var(--dimmer); border: 1px solid var(--border); }
-
-  /* ── Loading + Empty ──────────────────────────────────── */
-  #loading {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    padding: 60px;
-    color: var(--dim);
-    gap: 12px;
-    font-size: 13px;
-    grid-column: 1/-1;
-  }
-  .loader {
-    width: 32px; height: 32px;
-    border: 3px solid var(--border);
-    border-top-color: var(--accent);
-    border-radius: 50%;
-    animation: spin 0.8s linear infinite;
-  }
-
-  #empty-state {
-    grid-column: 1/-1;
-    text-align: center;
-    padding: 60px;
-    color: var(--dim);
-    font-size: 14px;
-  }
-
-  /* ── Scrollbar ───────────────────────────────────────── */
-  ::-webkit-scrollbar { width: 5px; }
-  ::-webkit-scrollbar-track { background: transparent; }
-  ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 10px; }
-  ::-webkit-scrollbar-thumb:hover { background: var(--dimmer); }
-
-  /* ── Toast ───────────────────────────────────────────── */
-  #toast {
-    position: fixed;
-    bottom: 20px;
-    right: 20px;
-    background: var(--s3);
-    border: 1px solid var(--border2);
-    border-radius: var(--radius-sm);
-    padding: 10px 16px;
-    font-size: 13px;
-    z-index: 200;
-    opacity: 0;
-    transform: translateY(10px);
-    transition: all 0.25s;
-    pointer-events: none;
-  }
-  #toast.show { opacity: 1; transform: translateY(0); }
-  #toast.success { border-left: 3px solid var(--green); }
-  #toast.error   { border-left: 3px solid var(--red); }
+/* scrollbar */
+::-webkit-scrollbar{width:5px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--border2);border-radius:10px}
 </style>
 </head>
 <body>
 
-<!-- ── SIDEBAR ──────────────────────────────────────────── -->
+<!-- ── SIDEBAR ── -->
 <aside id="sidebar">
   <div class="sb-logo">
-    <h1>Dev <span>Manager</span></h1>
-    <p>Project Dashboard</p>
+    <h1>Kai<span>View</span><span class="live-dot" id="live-dot" title="Live git watcher active"></span></h1>
+    <p>Developer OS</p>
   </div>
 
-  <div class="sb-section">
-    <div class="sb-section-label">View</div>
-    <button class="sb-btn active" onclick="setFilter('all', this)">
-      <span>◈</span> All Projects <span class="count" id="count-all">0</span>
-    </button>
-    <button class="sb-btn" onclick="setFilter('pinned', this)">
-      <span>📌</span> Pinned <span class="count" id="count-pinned">0</span>
-    </button>
+  <div class="sb-sec">
+    <div class="sb-lbl">View</div>
+    <button class="sb-btn active" onclick="setFilter('all',this)">◈ All Projects <span class="sb-cnt" id="cnt-all">0</span></button>
+    <button class="sb-btn" onclick="setFilter('pinned',this)">📌 Pinned <span class="sb-cnt" id="cnt-pinned">0</span></button>
   </div>
 
-  <div class="sb-section">
-    <div class="sb-section-label">Status</div>
-    <button class="sb-btn" onclick="setFilter('status:Active', this)">
-      <span class="dot" style="background:var(--green)"></span> Active <span class="count" id="count-active">0</span>
-    </button>
-    <button class="sb-btn" onclick="setFilter('status:In Progress', this)">
-      <span class="dot" style="background:var(--blue)"></span> In Progress <span class="count" id="count-inprogress">0</span>
-    </button>
-    <button class="sb-btn" onclick="setFilter('status:Paused', this)">
-      <span class="dot" style="background:var(--yellow)"></span> Paused <span class="count" id="count-paused">0</span>
-    </button>
-    <button class="sb-btn" onclick="setFilter('status:Complete', this)">
-      <span class="dot" style="background:#6b7280"></span> Complete <span class="count" id="count-complete">0</span>
-    </button>
-    <button class="sb-btn" onclick="setFilter('status:Archived', this)">
-      <span class="dot" style="background:var(--red)"></span> Archived <span class="count" id="count-archived">0</span>
-    </button>
+  <div class="sb-sec">
+    <div class="sb-lbl">Lens</div>
+    <button class="sb-btn" onclick="setFilter('lens:active_now',this)"><span class="sb-dot" style="background:var(--green)"></span>Active Now <span class="sb-cnt" id="cnt-active-now">0</span></button>
+    <button class="sb-btn" onclick="setFilter('lens:needs_attention',this)"><span class="sb-dot" style="background:var(--yellow)"></span>Needs Attention <span class="sb-cnt" id="cnt-needs">0</span></button>
+    <button class="sb-btn" onclick="setFilter('lens:neglected',this)"><span class="sb-dot" style="background:var(--red)"></span>Neglected <span class="sb-cnt" id="cnt-neglected">0</span></button>
+    <button class="sb-btn" onclick="setFilter('lens:other',this)"><span class="sb-dot" style="background:var(--dimmer)"></span>Paused / Done <span class="sb-cnt" id="cnt-other">0</span></button>
   </div>
 
-  <div class="sb-section">
-    <div class="sb-section-label">Category</div>
-    <button class="sb-btn" onclick="setFilter('cat:Android', this)">
-      <span>🤖</span> Android <span class="count" id="count-android">0</span>
-    </button>
-    <button class="sb-btn" onclick="setFilter('cat:Web', this)">
-      <span>🌐</span> Web <span class="count" id="count-web">0</span>
-    </button>
-    <button class="sb-btn" onclick="setFilter('cat:Backend', this)">
-      <span>⚡</span> Backend <span class="count" id="count-backend">0</span>
-    </button>
-    <button class="sb-btn" onclick="setFilter('cat:Bot', this)">
-      <span>💬</span> Bot <span class="count" id="count-bot">0</span>
-    </button>
-    <button class="sb-btn" onclick="setFilter('cat:Python', this)">
-      <span>🐍</span> Python <span class="count" id="count-python">0</span>
-    </button>
-    <button class="sb-btn" onclick="setFilter('cat:Hardware', this)">
-      <span>🔧</span> Hardware <span class="count" id="count-hardware">0</span>
-    </button>
-    <button class="sb-btn" onclick="setFilter('cat:Other', this)">
-      <span>📦</span> Other <span class="count" id="count-other">0</span>
-    </button>
+  <div class="sb-sec">
+    <div class="sb-lbl">Status</div>
+    <button class="sb-btn" onclick="setFilter('status:Active',this)"><span class="sb-dot" style="background:var(--green)"></span>Active <span class="sb-cnt" id="cnt-s-active">0</span></button>
+    <button class="sb-btn" onclick="setFilter('status:In Progress',this)"><span class="sb-dot" style="background:var(--blue)"></span>In Progress <span class="sb-cnt" id="cnt-s-inprog">0</span></button>
+    <button class="sb-btn" onclick="setFilter('status:Paused',this)"><span class="sb-dot" style="background:var(--yellow)"></span>Paused <span class="sb-cnt" id="cnt-s-paused">0</span></button>
+    <button class="sb-btn" onclick="setFilter('status:Complete',this)"><span class="sb-dot" style="background:#6b7280"></span>Complete <span class="sb-cnt" id="cnt-s-complete">0</span></button>
+    <button class="sb-btn" onclick="setFilter('status:Archived',this)"><span class="sb-dot" style="background:var(--red)"></span>Archived <span class="sb-cnt" id="cnt-s-archived">0</span></button>
   </div>
 
-  <div class="sb-section">
-    <div class="sb-section-label">AI Assigned</div>
-    <button class="sb-btn" onclick="setFilter('ai:Claude', this)">
-      <span>🟣</span> Claude <span class="count" id="count-claude">0</span>
-    </button>
-    <button class="sb-btn" onclick="setFilter('ai:DeepSeek', this)">
-      <span>🔵</span> DeepSeek <span class="count" id="count-deepseek">0</span>
-    </button>
-    <button class="sb-btn" onclick="setFilter('ai:Gemini', this)">
-      <span>🌀</span> Gemini <span class="count" id="count-gemini">0</span>
-    </button>
-    <button class="sb-btn" onclick="setFilter('ai:ChatGPT', this)">
-      <span>🟢</span> ChatGPT <span class="count" id="count-chatgpt">0</span>
-    </button>
-    <button class="sb-btn" onclick="setFilter('ai:None', this)">
-      <span>⚪</span> Unassigned <span class="count" id="count-ai-none">0</span>
-    </button>
+  <div class="sb-sec">
+    <div class="sb-lbl">Category</div>
+    <button class="sb-btn" onclick="setFilter('cat:Android',this)">🤖 Android <span class="sb-cnt" id="cnt-android">0</span></button>
+    <button class="sb-btn" onclick="setFilter('cat:Web',this)">🌐 Web <span class="sb-cnt" id="cnt-web">0</span></button>
+    <button class="sb-btn" onclick="setFilter('cat:Backend',this)">⚡ Backend <span class="sb-cnt" id="cnt-backend">0</span></button>
+    <button class="sb-btn" onclick="setFilter('cat:Bot',this)">💬 Bot <span class="sb-cnt" id="cnt-bot">0</span></button>
+    <button class="sb-btn" onclick="setFilter('cat:Python',this)">🐍 Python <span class="sb-cnt" id="cnt-python">0</span></button>
+    <button class="sb-btn" onclick="setFilter('cat:Hardware',this)">🔧 Hardware <span class="sb-cnt" id="cnt-hardware">0</span></button>
+    <button class="sb-btn" onclick="setFilter('cat:Other',this)">📦 Other <span class="sb-cnt" id="cnt-other-cat">0</span></button>
+  </div>
+
+  <div class="sb-sec">
+    <div class="sb-lbl">AI Assigned</div>
+    <button class="sb-btn" onclick="setFilter('ai:Claude',this)">🟣 Claude <span class="sb-cnt" id="cnt-claude">0</span></button>
+    <button class="sb-btn" onclick="setFilter('ai:DeepSeek',this)">🔵 DeepSeek <span class="sb-cnt" id="cnt-deepseek">0</span></button>
+    <button class="sb-btn" onclick="setFilter('ai:Gemini',this)">🌀 Gemini <span class="sb-cnt" id="cnt-gemini">0</span></button>
+    <button class="sb-btn" onclick="setFilter('ai:ChatGPT',this)">🟢 ChatGPT <span class="sb-cnt" id="cnt-chatgpt">0</span></button>
+    <button class="sb-btn" onclick="setFilter('ai:None',this)">⚪ Unassigned <span class="sb-cnt" id="cnt-ai-none">0</span></button>
   </div>
 </aside>
 
-<!-- ── MAIN ──────────────────────────────────────────────── -->
+<!-- ── MAIN ── -->
 <div id="main">
   <div id="topbar">
-    <input id="search" type="text" placeholder="Search projects..." oninput="renderGrid()" />
-    <div class="topbar-stat">Total <strong id="stat-total">—</strong></div>
-    <div class="topbar-stat">Active <strong id="stat-active">—</strong></div>
-    <div class="topbar-stat">Git Repos <strong id="stat-git">—</strong></div>
+    <input id="search" type="text" placeholder="Search projects… (Ctrl+F)" oninput="renderAll()"/>
+    <div class="tb-stat">Total <strong id="stat-total">—</strong></div>
+    <div class="tb-stat">🟢 <strong id="stat-active">—</strong></div>
+    <div class="tb-stat">⚠ <strong id="stat-needs">—</strong></div>
+    <span id="refreshed"></span>
     <button id="refresh-btn" onclick="loadProjects()" title="Refresh">↻</button>
   </div>
-
   <div id="grid-area">
-    <div id="grid-info"></div>
-    <div id="projects-grid">
-      <div id="loading"><div class="loader"></div><span>Loading projects…</span></div>
-    </div>
+    <div id="grid-root"><div class="proj-grid"><div class="loading"><div class="loader"></div><span>Loading projects…</span></div></div></div>
   </div>
 </div>
 
-<!-- ── EDIT MODAL ────────────────────────────────────────── -->
-<div class="modal-overlay" id="edit-overlay">
-  <div class="modal">
-    <div class="modal-header">
-      <h2>✏️ Edit Project — <span id="edit-name-title"></span></h2>
-      <button class="modal-close" onclick="closeModal('edit-overlay')">✕</button>
-    </div>
-
-    <div class="form-group">
-      <label class="form-label">Description</label>
-      <input class="form-input" id="edit-desc" placeholder="Brief description of this project" />
-    </div>
-
-    <div class="form-row">
-      <div class="form-group">
-        <label class="form-label">Category</label>
-        <select class="form-select" id="edit-category">
-          <option>Android</option>
-          <option>Web</option>
-          <option>Backend</option>
-          <option>Full Stack</option>
-          <option>Bot</option>
-          <option>Hardware</option>
-          <option>Python</option>
-          <option>Other</option>
-        </select>
-      </div>
-      <div class="form-group">
-        <label class="form-label">Status</label>
-        <select class="form-select" id="edit-status">
-          <option>Active</option>
-          <option>In Progress</option>
-          <option>Paused</option>
-          <option>Complete</option>
-          <option>Archived</option>
-        </select>
-      </div>
-    </div>
-
-    <div class="form-group">
-      <label class="form-label">AI Assigned</label>
-      <select class="form-select" id="edit-ai">
-        <option value="None">None</option>
-        <option value="Claude">Claude (Sonnet)</option>
-        <option value="Claude Opus">Claude (Opus)</option>
-        <option value="DeepSeek">DeepSeek</option>
-        <option value="Gemini">Gemini</option>
-        <option value="ChatGPT">ChatGPT</option>
-        <option value="Copilot">GitHub Copilot</option>
-      </select>
-    </div>
-
-    <div class="form-group">
-      <label class="form-label">Notes</label>
-      <textarea class="form-textarea" id="edit-notes" placeholder="Any private notes, TODOs, context…"></textarea>
-    </div>
-
-    <div class="form-group" style="display:flex; align-items:center; gap:10px;">
-      <input type="checkbox" id="edit-pinned" style="width:16px;height:16px;accent-color:var(--accent);" />
-      <label for="edit-pinned" style="font-size:13px; color:var(--dim); cursor:pointer;">Pin this project to the top</label>
-    </div>
-
-    <div class="form-actions">
-      <button class="btn btn-ghost" onclick="closeModal('edit-overlay')">Cancel</button>
-      <button class="btn btn-primary" onclick="saveEdit()">Save Changes</button>
-    </div>
+<!-- ── EDIT MODAL ── -->
+<div class="overlay" id="edit-ov">
+<div class="modal">
+  <div class="modal-hdr"><h2>✏️ Edit — <span id="edit-title"></span></h2><button class="modal-close" onclick="closeModal('edit-ov')">✕</button></div>
+  <div class="fg"><label class="fl">Description</label><input class="fi" id="ed-desc" placeholder="Brief description"/></div>
+  <div class="frow">
+    <div class="fg"><label class="fl">Category</label>
+      <select class="fs" id="ed-cat">
+        <option>Android</option><option>Web</option><option>Backend</option>
+        <option>Full Stack</option><option>Bot</option><option>Hardware</option>
+        <option>Python</option><option>Other</option>
+      </select></div>
+    <div class="fg"><label class="fl">Status</label>
+      <select class="fs" id="ed-status">
+        <option>Active</option><option>In Progress</option><option>Paused</option>
+        <option>Complete</option><option>Archived</option>
+      </select></div>
+  </div>
+  <div class="fg"><label class="fl">AI Assigned</label>
+    <select class="fs" id="ed-ai">
+      <option value="None">None</option><option value="Claude">Claude (Sonnet)</option>
+      <option value="Claude Opus">Claude (Opus)</option><option value="DeepSeek">DeepSeek</option>
+      <option value="Gemini">Gemini</option><option value="ChatGPT">ChatGPT</option>
+      <option value="Copilot">GitHub Copilot</option>
+    </select></div>
+  <div class="fg"><label class="fl">Current Task</label><input class="fi" id="ed-task" placeholder="What are you working on right now?"/></div>
+  <div class="fg"><label class="fl">Next Action</label><input class="fi" id="ed-next" placeholder="What's the very next thing to do?"/></div>
+  <div class="fg"><label class="fl">AI Context Snippet</label><textarea class="fta" id="ed-ctx" placeholder="Context to paste into AI chats for this project…"></textarea></div>
+  <div class="frow">
+    <div class="fg"><label class="fl">Repo URL</label><input class="fi" id="ed-repo" placeholder="https://github.com/…"/></div>
+    <div class="fg"><label class="fl">Deploy URL</label><input class="fi" id="ed-deploy" placeholder="https://…"/></div>
+  </div>
+  <div class="fg"><label class="fl">Notes</label><textarea class="fta" id="ed-notes" placeholder="Private notes…"></textarea></div>
+  <div class="fg" style="display:flex;align-items:center;gap:9px">
+    <input type="checkbox" id="ed-pinned" style="width:15px;height:15px;accent-color:var(--accent)"/>
+    <label for="ed-pinned" style="font-size:13px;color:var(--dim);cursor:pointer">Pin to top</label>
+  </div>
+  <div class="f-actions">
+    <button class="btn btn-ghost" onclick="closeModal('edit-ov')">Cancel</button>
+    <button class="btn btn-primary" onclick="saveEdit()">Save</button>
   </div>
 </div>
-
-<!-- ── GIT MODAL ─────────────────────────────────────────── -->
-<div class="modal-overlay" id="git-overlay">
-  <div class="modal">
-    <div class="modal-header">
-      <h2>⎇ Git Status — <span id="git-name-title"></span></h2>
-      <button class="modal-close" onclick="closeModal('git-overlay')">✕</button>
-    </div>
-    <div class="git-modal-content">
-      <div class="git-section-title">Working Tree Status</div>
-      <div class="git-block" id="git-status-block">Loading…</div>
-      <div class="git-section-title">Recent Commits</div>
-      <div class="git-block" id="git-log-block">Loading…</div>
-    </div>
-  </div>
 </div>
 
-<!-- ── TOAST ─────────────────────────────────────────────── -->
+<!-- ── RESUME MODAL ── -->
+<div class="overlay" id="resume-ov">
+<div class="modal">
+  <div class="modal-hdr"><h2>▶ Resume — <span id="resume-title"></span></h2><button class="modal-close" onclick="closeModal('resume-ov')">✕</button></div>
+  <div id="resume-task-card" class="resume-card" style="display:none">
+    <div class="rc-label">Current Task</div>
+    <div class="rc-value" id="resume-task"></div>
+    <div class="rc-value next" id="resume-next"></div>
+  </div>
+  <div id="resume-ctx-wrap" style="display:none">
+    <div class="git-sec-lbl">AI Context (copied to clipboard)</div>
+    <div class="ai-ctx-block" id="resume-ctx"></div>
+  </div>
+  <p style="font-size:12px;color:var(--dim);line-height:1.6">VS Code is opening. Your AI context has been copied to clipboard — paste it when you start a new AI session.</p>
+  <div class="f-actions" style="margin-top:14px">
+    <button class="btn btn-ghost" onclick="closeModal('resume-ov')">Close</button>
+  </div>
+</div>
+</div>
+
+<!-- ── PARK MODAL ── -->
+<div class="overlay" id="park-ov">
+<div class="modal">
+  <div class="modal-hdr"><h2>⏸ Park — <span id="park-title"></span></h2><button class="modal-close" onclick="closeModal('park-ov')">✕</button></div>
+  <p style="font-size:12px;color:var(--dim);margin-bottom:14px;line-height:1.6">Save your session state so you can pick up exactly where you left off.</p>
+  <div class="fg"><label class="fl">Where I left off</label><input class="fi" id="park-task" placeholder="e.g. debugging auth middleware…"/></div>
+  <div class="fg"><label class="fl">Next action</label><input class="fi" id="park-next" placeholder="e.g. check the JWT expiry logic…"/></div>
+  <div class="fg"><label class="fl">Blockers</label><input class="fi" id="park-blockers" placeholder="e.g. waiting on API key from client"/></div>
+  <div class="fg"><label class="fl">Session note (optional)</label><textarea class="fta" id="park-note" placeholder="Any quick notes to your future self…" style="min-height:60px"></textarea></div>
+  <div class="f-actions">
+    <button class="btn btn-ghost" onclick="closeModal('park-ov')">Cancel</button>
+    <button class="btn btn-park" onclick="savePark()">Park Session</button>
+  </div>
+</div>
+</div>
+
+<!-- ── GIT MODAL ── -->
+<div class="overlay" id="git-ov">
+<div class="modal">
+  <div class="modal-hdr"><h2>⎇ Git — <span id="git-title"></span></h2><button class="modal-close" onclick="closeModal('git-ov')">✕</button></div>
+  <div class="git-sec-lbl">Working Tree Status</div>
+  <div class="git-block" id="git-status-block">Loading…</div>
+  <div class="git-sec-lbl">Recent Commits</div>
+  <div class="git-block" id="git-log-block">Loading…</div>
+</div>
+</div>
+
 <div id="toast"></div>
 
 <script>
 const API = '';
 let allProjects = [];
-let currentFilter = 'all';
-let editingProject = null;
+let activeFilter = 'all';
+let editingName  = null;
+let parkingName  = null;
 
-const CATEGORY_ICONS = {
-  Android: '🤖', Web: '🌐', Backend: '⚡', 'Full Stack': '🏗️',
-  Bot: '💬', Hardware: '🔧', Python: '🐍', Other: '📦'
-};
+const CAT_ICON = {Android:'🤖',Web:'🌐',Backend:'⚡','Full Stack':'🏗️',Bot:'💬',Hardware:'🔧',Python:'🐍',Other:'📦'};
+const AI_ICON  = {Claude:'🟣','Claude Opus':'🔮',DeepSeek:'🔵',Gemini:'🌀',ChatGPT:'🟢',Copilot:'🤍',None:'⚪'};
 
-const AI_ICONS = {
-  Claude: '🟣', 'Claude Opus': '🔮', DeepSeek: '🔵',
-  Gemini: '🌀', ChatGPT: '🟢', Copilot: '🤍', None: '⚪'
-};
+function sc(s){ return 's-'+s.replace(' ','') }
+function cc(c){ return 'c-'+c.replace(' ','') }
+function ac(a){ return 'ai-'+(a||'None').split(' ')[0] }
 
-const STATUS_LABELS = {
-  Active: 'Active', 'In Progress': 'In Progress',
-  Paused: 'Paused', Complete: 'Complete', Archived: 'Archived'
-};
-
-function statusClass(s) {
-  return 'status-' + s.replace(' ', '');
+function staleLevel(s){
+  if(s===0) return '0';
+  if(s<30)  return 'low';
+  if(s<65)  return 'mid';
+  return 'high';
 }
-function catClass(c) {
-  return 'cat-' + c.replace(' ', '');
-}
-function aiClass(a) {
-  const key = a.split(' ')[0];
-  return 'ai-' + key;
+function staleColor(s){
+  if(s===0)  return 'var(--green)';
+  if(s<30)   return 'var(--yellow)';
+  if(s<65)   return 'var(--orange)';
+  return 'var(--red)';
 }
 
-async function loadProjects() {
+// ── WebSocket ──────────────────────────────────────────────────────
+let ws;
+function connectWS(){
+  ws = new WebSocket(`ws://${location.host}/ws`);
+  ws.onopen  = () => { document.getElementById('live-dot').style.background='var(--green)'; };
+  ws.onclose = () => { document.getElementById('live-dot').style.background='var(--red)'; setTimeout(connectWS, 5000); };
+  ws.onmessage = (e) => {
+    const msg = JSON.parse(e.data);
+    if(msg.type === 'git_update'){
+      msg.projects.forEach(u => {
+        const p = allProjects.find(x => x.name === u.name);
+        if(p){ p.git = u.git; }
+      });
+      document.getElementById('refreshed').textContent = 'Live ✓';
+      renderAll();
+    }
+  };
+}
+
+// ── Load ───────────────────────────────────────────────────────────
+async function loadProjects(){
   const btn = document.getElementById('refresh-btn');
-  btn.classList.add('spinning');
-
-  try {
+  btn.classList.add('spin');
+  try{
     const res = await fetch(`${API}/api/projects`);
     allProjects = await res.json();
-    updateSidebarCounts();
-    renderGrid();
+    updateCounts();
     updateStats();
-  } catch(e) {
-    showToast('Failed to load projects. Is the server running?', 'error');
+    renderAll();
+    document.getElementById('refreshed').textContent = 'Updated just now';
+  } catch(e){
+    toast('Failed to load. Is server running?','err');
   } finally {
-    btn.classList.remove('spinning');
+    btn.classList.remove('spin');
   }
 }
 
-function updateStats() {
-  document.getElementById('stat-total').textContent = allProjects.length;
-  document.getElementById('stat-active').textContent =
-    allProjects.filter(p => p.status === 'Active' || p.status === 'In Progress').length;
-  document.getElementById('stat-git').textContent =
-    allProjects.filter(p => p.git && p.git.is_git).length;
+function updateStats(){
+  document.getElementById('stat-total').textContent  = allProjects.length;
+  document.getElementById('stat-active').textContent = allProjects.filter(p=>p.lens==='active_now').length;
+  document.getElementById('stat-needs').textContent  = allProjects.filter(p=>p.lens==='needs_attention').length;
 }
 
-function updateSidebarCounts() {
-  const count = (fn) => allProjects.filter(fn).length;
-
-  document.getElementById('count-all').textContent = allProjects.length;
-  document.getElementById('count-pinned').textContent = count(p => p.pinned);
-  document.getElementById('count-active').textContent = count(p => p.status === 'Active');
-  document.getElementById('count-inprogress').textContent = count(p => p.status === 'In Progress');
-  document.getElementById('count-paused').textContent = count(p => p.status === 'Paused');
-  document.getElementById('count-complete').textContent = count(p => p.status === 'Complete');
-  document.getElementById('count-archived').textContent = count(p => p.status === 'Archived');
-
-  document.getElementById('count-android').textContent = count(p => p.category === 'Android');
-  document.getElementById('count-web').textContent = count(p => p.category === 'Web');
-  document.getElementById('count-backend').textContent = count(p => p.category === 'Backend');
-  document.getElementById('count-bot').textContent = count(p => p.category === 'Bot');
-  document.getElementById('count-python').textContent = count(p => p.category === 'Python');
-  document.getElementById('count-hardware').textContent = count(p => p.category === 'Hardware');
-  document.getElementById('count-other').textContent = count(p => p.category === 'Other');
-
-  document.getElementById('count-claude').textContent = count(p => p.ai_assigned && p.ai_assigned.startsWith('Claude'));
-  document.getElementById('count-deepseek').textContent = count(p => p.ai_assigned === 'DeepSeek');
-  document.getElementById('count-gemini').textContent = count(p => p.ai_assigned === 'Gemini');
-  document.getElementById('count-chatgpt').textContent = count(p => p.ai_assigned === 'ChatGPT');
-  document.getElementById('count-ai-none').textContent = count(p => !p.ai_assigned || p.ai_assigned === 'None');
+function updateCounts(){
+  const c = (fn) => allProjects.filter(fn).length;
+  document.getElementById('cnt-all').textContent       = allProjects.length;
+  document.getElementById('cnt-pinned').textContent    = c(p=>p.pinned);
+  document.getElementById('cnt-active-now').textContent= c(p=>p.lens==='active_now');
+  document.getElementById('cnt-needs').textContent     = c(p=>p.lens==='needs_attention');
+  document.getElementById('cnt-neglected').textContent = c(p=>p.lens==='neglected');
+  document.getElementById('cnt-other').textContent     = c(p=>p.lens==='other');
+  document.getElementById('cnt-s-active').textContent  = c(p=>p.status==='Active');
+  document.getElementById('cnt-s-inprog').textContent  = c(p=>p.status==='In Progress');
+  document.getElementById('cnt-s-paused').textContent  = c(p=>p.status==='Paused');
+  document.getElementById('cnt-s-complete').textContent= c(p=>p.status==='Complete');
+  document.getElementById('cnt-s-archived').textContent= c(p=>p.status==='Archived');
+  document.getElementById('cnt-android').textContent   = c(p=>p.category==='Android');
+  document.getElementById('cnt-web').textContent       = c(p=>p.category==='Web');
+  document.getElementById('cnt-backend').textContent   = c(p=>p.category==='Backend');
+  document.getElementById('cnt-bot').textContent       = c(p=>p.category==='Bot');
+  document.getElementById('cnt-python').textContent    = c(p=>p.category==='Python');
+  document.getElementById('cnt-hardware').textContent  = c(p=>p.category==='Hardware');
+  document.getElementById('cnt-other-cat').textContent = c(p=>p.category==='Other');
+  document.getElementById('cnt-claude').textContent    = c(p=>p.ai_assigned&&p.ai_assigned.startsWith('Claude'));
+  document.getElementById('cnt-deepseek').textContent  = c(p=>p.ai_assigned==='DeepSeek');
+  document.getElementById('cnt-gemini').textContent    = c(p=>p.ai_assigned==='Gemini');
+  document.getElementById('cnt-chatgpt').textContent   = c(p=>p.ai_assigned==='ChatGPT');
+  document.getElementById('cnt-ai-none').textContent   = c(p=>!p.ai_assigned||p.ai_assigned==='None');
 }
 
-function getFiltered() {
-  const query = document.getElementById('search').value.toLowerCase().trim();
+// ── Filter + Render ────────────────────────────────────────────────
+function getFiltered(){
+  const q = document.getElementById('search').value.toLowerCase().trim();
   return allProjects.filter(p => {
-    // Search
-    if (query) {
-      const match = p.name.toLowerCase().includes(query) ||
-        p.description.toLowerCase().includes(query) ||
-        p.stack.join(' ').toLowerCase().includes(query) ||
-        p.category.toLowerCase().includes(query);
-      if (!match) return false;
+    if(q){
+      const m = p.name.toLowerCase().includes(q)||p.description.toLowerCase().includes(q)||
+                p.stack.join(' ').toLowerCase().includes(q)||p.category.toLowerCase().includes(q)||
+                (p.current_task||'').toLowerCase().includes(q);
+      if(!m) return false;
     }
-    // Filter
-    if (currentFilter === 'all') return true;
-    if (currentFilter === 'pinned') return p.pinned;
-    if (currentFilter.startsWith('status:')) return p.status === currentFilter.slice(7);
-    if (currentFilter.startsWith('cat:')) return p.category === currentFilter.slice(4);
-    if (currentFilter.startsWith('ai:')) {
-      const ai = currentFilter.slice(3);
-      if (ai === 'Claude') return p.ai_assigned && p.ai_assigned.startsWith('Claude');
-      return p.ai_assigned === ai;
+    if(activeFilter==='all')    return true;
+    if(activeFilter==='pinned') return p.pinned;
+    if(activeFilter.startsWith('lens:'))   return p.lens===activeFilter.slice(5);
+    if(activeFilter.startsWith('status:')) return p.status===activeFilter.slice(7);
+    if(activeFilter.startsWith('cat:'))    return p.category===activeFilter.slice(4);
+    if(activeFilter.startsWith('ai:')){
+      const ai=activeFilter.slice(3);
+      return ai==='Claude'?p.ai_assigned&&p.ai_assigned.startsWith('Claude'):p.ai_assigned===ai;
     }
     return true;
   });
 }
 
-function renderGrid() {
-  const grid = document.getElementById('projects-grid');
+function renderAll(){
+  const root     = document.getElementById('grid-root');
   const filtered = getFiltered();
-  const info = document.getElementById('grid-info');
-  info.textContent = `Showing ${filtered.length} of ${allProjects.length} projects`;
 
-  if (filtered.length === 0) {
-    grid.innerHTML = `<div id="empty-state">No projects match your filter.<br><span style="font-size:12px;color:var(--dimmer)">Try adjusting the search or filter.</span></div>`;
-    return;
+  if(activeFilter==='all' || activeFilter==='pinned'){
+    // Group by lens
+    const groups = {
+      active_now:      {label:'⬤ Active Now',      cls:'lens-active',   items:[]},
+      needs_attention: {label:'⚠ Needs Attention', cls:'lens-needs',    items:[]},
+      neglected:       {label:'◌ Neglected',        cls:'lens-neglected',items:[]},
+      other:           {label:'— Paused / Done',    cls:'lens-other',    items:[]},
+    };
+    filtered.forEach(p => {
+      const g = groups[p.lens] || groups.other;
+      g.items.push(p);
+    });
+    let html = '';
+    for(const [, g] of Object.entries(groups)){
+      if(!g.items.length) continue;
+      html += `<div class="lens-section ${g.cls}">
+        <div class="lens-header">
+          <span class="lens-title">${g.label}</span>
+          <span class="lens-count">${g.items.length}</span>
+        </div>
+        <div class="proj-grid">${g.items.map(buildCard).join('')}</div>
+      </div>`;
+    }
+    root.innerHTML = html || `<div class="proj-grid"><div class="empty">No projects found.</div></div>`;
+  } else {
+    root.innerHTML = `<div class="proj-grid">${
+      filtered.length ? filtered.map(buildCard).join('') : '<div class="empty">No projects match this filter.</div>'
+    }</div>`;
   }
-
-  grid.innerHTML = filtered.map(p => buildCard(p)).join('');
 }
 
-function buildCard(p) {
-  const git = p.git;
-  const icon = CATEGORY_ICONS[p.category] || '📦';
-  const aiIcon = AI_ICONS[p.ai_assigned] || '⚪';
-  const aiLabel = p.ai_assigned || 'None';
+function buildCard(p){
+  const icon   = CAT_ICON[p.category]||'📦';
+  const aiIcon = AI_ICON[p.ai_assigned]||'⚪';
+  const aiLbl  = p.ai_assigned||'None';
+  const sl     = staleLevel(p.staleness);
+  const sc_    = staleColor(p.staleness);
 
-  let gitHtml = '';
-  if (git && git.is_git) {
-    const dirtyBadge = git.dirty
-      ? `<span class="git-dirty">⬤ ${git.changes} change${git.changes !== 1 ? 's' : ''}</span>`
-      : `<span class="git-clean">⬤ clean</span>`;
-    gitHtml = `
-      <div class="card-git" onclick="openGitModal('${p.name}')" title="Click for git details" style="cursor:pointer">
-        <span class="git-branch">⎇ ${escHtml(git.branch)}</span>
-        ${dirtyBadge}
-        <span class="git-time">${escHtml(git.commit_time || '')}</span>
-      </div>`;
-  } else if (git) {
-    gitHtml = `<div class="card-git" style="color:var(--dimmer)">⚠ Not a git repo</div>`;
+  let focusHtml = '';
+  if(p.current_task){
+    focusHtml = `<div class="card-focus">
+      <div class="focus-label">Working on</div>
+      <div>${esc(p.current_task)}</div>
+      ${p.next_action?`<div class="next">→ ${esc(p.next_action)}</div>`:''}
+    </div>`;
   }
 
-  const stackTags = p.stack.slice(0, 4).map(s =>
-    `<span class="tag">${escHtml(s)}</span>`
-  ).join('');
+  let gitHtml = '';
+  const g = p.git;
+  if(g&&g.is_git){
+    const dirty = g.dirty?`<span class="git-dirty">⬤ ${g.changes} change${g.changes!==1?'s':''}</span>`:`<span class="git-clean">⬤ clean</span>`;
+    gitHtml=`<div class="card-git" onclick="openGitModal('${esc(p.name)}')" title="Git details">
+      <span class="git-branch">⎇ ${esc(g.branch)}</span>${dirty}
+      <span class="git-time">${esc(g.commit_time||'')}</span>
+    </div>`;
+  } else {
+    gitHtml=`<div class="card-git" style="color:var(--dimmer)">⚠ No git</div>`;
+  }
 
-  const hasNotes = p.notes && p.notes.trim();
+  const tags = (p.stack||[]).slice(0,4).map(s=>`<span class="tag">${esc(s)}</span>`).join('');
 
-  return `
-  <div class="card ${p.pinned ? 'pinned' : ''}" data-name="${escHtml(p.name)}">
+  return `<div class="card${p.pinned?' pinned':''}" data-stale="${sl}">
     <div class="card-header">
-      <div class="card-icon" style="background:var(--s3)">${icon}</div>
+      <div class="card-icon">${icon}</div>
       <div class="card-title-area">
-        <div class="card-name" title="${escHtml(p.name)}">${escHtml(p.name)}</div>
-        <div class="card-desc" title="${escHtml(p.description)}">${escHtml(p.description)}</div>
+        <div class="card-name" title="${esc(p.name)}">${esc(p.name)}</div>
+        <div class="card-desc" title="${esc(p.description)}">${esc(p.description)}</div>
       </div>
     </div>
-
     <div class="card-badges">
-      <span class="badge ${statusClass(p.status)}">${escHtml(p.status)}</span>
-      <span class="badge ${catClass(p.category)}">${icon} ${escHtml(p.category)}</span>
-      <span class="badge ai-badge ${aiClass(p.ai_assigned)}">${aiIcon} ${escHtml(aiLabel)}</span>
-      ${hasNotes ? `<span class="badge" style="background:var(--s3);color:var(--dim);border:1px solid var(--border)" title="${escHtml(p.notes)}">📝 Notes</span>` : ''}
+      <span class="badge ${sc(p.status)}">${esc(p.status)}</span>
+      <span class="badge ${cc(p.category)}">${icon} ${esc(p.category)}</span>
+      <span class="badge ${ac(p.ai_assigned)}">${aiIcon} ${esc(aiLbl)}</span>
     </div>
-
-    <div style="display:flex;flex-wrap:wrap;gap:4px">${stackTags}</div>
-
+    <div style="display:flex;flex-wrap:wrap;gap:3px">${tags}</div>
+    ${focusHtml}
+    <div class="stale-bar"><div class="stale-fill" style="width:${p.staleness}%;background:${sc_}"></div></div>
     ${gitHtml}
-
     <div class="card-actions">
-      <button class="action-btn" onclick="openVSCode('${p.name}')">⬡ VS Code</button>
-      <button class="action-btn" onclick="openGitModal('${p.name}')">⎇ Git</button>
-      <button class="action-btn primary" onclick="openEditModal('${p.name}')">✏ Edit</button>
+      <button class="act-btn resume" onclick="openResumeModal('${esc(p.name)}')">▶ Resume</button>
+      <button class="act-btn park"   onclick="openParkModal('${esc(p.name)}')">⏸ Park</button>
+      <button class="act-btn"        onclick="openGitModal('${esc(p.name)}')">⎇</button>
+      <button class="act-btn primary" onclick="openEditModal('${esc(p.name)}')">✏</button>
     </div>
   </div>`;
 }
 
-function setFilter(filter, btn) {
-  currentFilter = filter;
-  document.querySelectorAll('.sb-btn').forEach(b => b.classList.remove('active'));
+// ── Filter ─────────────────────────────────────────────────────────
+function setFilter(f, btn){
+  activeFilter = f;
+  document.querySelectorAll('.sb-btn').forEach(b=>b.classList.remove('active'));
   btn.classList.add('active');
-  renderGrid();
+  renderAll();
 }
 
-function openEditModal(name) {
-  const p = allProjects.find(x => x.name === name);
-  if (!p) return;
-  editingProject = name;
-
-  document.getElementById('edit-name-title').textContent = name;
-  document.getElementById('edit-desc').value = p.description === 'No description yet.' ? '' : p.description;
-  document.getElementById('edit-category').value = p.category;
-  document.getElementById('edit-status').value = p.status;
-  document.getElementById('edit-ai').value = p.ai_assigned || 'None';
-  document.getElementById('edit-notes').value = p.notes || '';
-  document.getElementById('edit-pinned').checked = p.pinned || false;
-
-  document.getElementById('edit-overlay').classList.add('open');
-}
-
-async function saveEdit() {
-  if (!editingProject) return;
-  const body = {
-    description: document.getElementById('edit-desc').value.trim(),
-    category: document.getElementById('edit-category').value,
-    status: document.getElementById('edit-status').value,
-    ai_assigned: document.getElementById('edit-ai').value,
-    notes: document.getElementById('edit-notes').value.trim(),
-    pinned: document.getElementById('edit-pinned').checked,
-  };
-
-  try {
-    await fetch(`${API}/api/projects/${encodeURIComponent(editingProject)}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    });
-    closeModal('edit-overlay');
-    showToast(`Saved ${editingProject}`, 'success');
-    await loadProjects();
-  } catch(e) {
-    showToast('Save failed', 'error');
-  }
-}
-
-async function openGitModal(name) {
-  document.getElementById('git-name-title').textContent = name;
-  document.getElementById('git-status-block').textContent = 'Loading…';
-  document.getElementById('git-log-block').textContent = 'Loading…';
-  document.getElementById('git-overlay').classList.add('open');
-
-  try {
-    const res = await fetch(`${API}/api/projects/${encodeURIComponent(name)}/git`);
+// ── Resume ─────────────────────────────────────────────────────────
+async function openResumeModal(name){
+  document.getElementById('resume-title').textContent = name;
+  document.getElementById('resume-ov').classList.add('open');
+  try{
+    const res  = await fetch(`${API}/api/projects/${encodeURIComponent(name)}/resume`,{method:'POST'});
     const data = await res.json();
+    const tc = document.getElementById('resume-task-card');
+    if(data.current_task){
+      document.getElementById('resume-task').textContent = data.current_task;
+      document.getElementById('resume-next').textContent = data.next_action ? '→ '+data.next_action : '';
+      tc.style.display='block';
+    } else { tc.style.display='none'; }
+    const cw = document.getElementById('resume-ctx-wrap');
+    if(data.ai_context){
+      document.getElementById('resume-ctx').textContent = data.ai_context;
+      cw.style.display='block';
+      try{ await navigator.clipboard.writeText(data.ai_context); } catch(e){}
+    } else { cw.style.display='none'; }
+    toast(`Resumed ${name}`, 'ok');
+    await loadProjects();
+  } catch(e){ toast('Resume failed','err'); }
+}
 
-    const statusEl = document.getElementById('git-status-block');
-    if (!data.status || data.status === 'Not a git repository') {
-      statusEl.textContent = data.status || 'Not a git repository';
-    } else {
-      statusEl.innerHTML = data.status.split('\n').map(line => {
-        const prefix = line.slice(0, 2).trim();
-        const cls = prefix === '??' ? 'added' : prefix === 'M' ? 'modified' : prefix === 'D' ? 'deleted' : '';
-        return `<span class="${cls}">${escHtml(line)}</span>`;
-      }).join('\n');
-    }
-
-    const logEl = document.getElementById('git-log-block');
-    if (!data.log) {
-      logEl.textContent = 'No commits yet';
-    } else {
-      logEl.innerHTML = data.log.split('\n').map(line => {
-        const [hash, ...rest] = line.split(' ');
-        return `<span class="hash">${escHtml(hash)}</span> ${escHtml(rest.join(' '))}`;
-      }).join('\n');
-    }
-  } catch(e) {
-    document.getElementById('git-status-block').textContent = 'Error loading git info';
-    document.getElementById('git-log-block').textContent = '';
+// ── Park ───────────────────────────────────────────────────────────
+function openParkModal(name){
+  parkingName = name;
+  document.getElementById('park-title').textContent = name;
+  const p = allProjects.find(x=>x.name===name);
+  if(p){
+    document.getElementById('park-task').value     = p.current_task||'';
+    document.getElementById('park-next').value     = p.next_action||'';
+    document.getElementById('park-blockers').value = p.blockers||'';
   }
+  document.getElementById('park-note').value = '';
+  document.getElementById('park-ov').classList.add('open');
 }
 
-async function openVSCode(name) {
-  try {
-    await fetch(`${API}/api/projects/${encodeURIComponent(name)}/open`, { method: 'POST' });
-    showToast(`Opening ${name} in VS Code…`, 'success');
-  } catch(e) {
-    showToast('Could not open VS Code', 'error');
-  }
+async function savePark(){
+  if(!parkingName) return;
+  const body = {
+    note:         document.getElementById('park-note').value.trim(),
+    current_task: document.getElementById('park-task').value.trim(),
+    next_action:  document.getElementById('park-next').value.trim(),
+    blockers:     document.getElementById('park-blockers').value.trim(),
+  };
+  try{
+    await fetch(`${API}/api/projects/${encodeURIComponent(parkingName)}/park`,{
+      method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)
+    });
+    closeModal('park-ov');
+    toast(`Parked ${parkingName}`,'ok');
+    await loadProjects();
+  } catch(e){ toast('Park failed','err'); }
 }
 
-function closeModal(id) {
-  document.getElementById(id).classList.remove('open');
+// ── Edit ───────────────────────────────────────────────────────────
+function openEditModal(name){
+  const p = allProjects.find(x=>x.name===name);
+  if(!p) return;
+  editingName = name;
+  document.getElementById('edit-title').textContent = name;
+  document.getElementById('ed-desc').value   = p.description==='No description yet.'?'':p.description;
+  document.getElementById('ed-cat').value    = p.category;
+  document.getElementById('ed-status').value = p.status;
+  document.getElementById('ed-ai').value     = p.ai_assigned||'None';
+  document.getElementById('ed-task').value   = p.current_task||'';
+  document.getElementById('ed-next').value   = p.next_action||'';
+  document.getElementById('ed-ctx').value    = p.ai_context_snippet||'';
+  document.getElementById('ed-repo').value   = p.link_repo||'';
+  document.getElementById('ed-deploy').value = p.link_deploy||'';
+  document.getElementById('ed-notes').value  = p.notes||'';
+  document.getElementById('ed-pinned').checked = p.pinned||false;
+  document.getElementById('edit-ov').classList.add('open');
 }
 
-function showToast(msg, type = 'success') {
-  const t = document.getElementById('toast');
-  t.textContent = msg;
-  t.className = `show ${type}`;
-  setTimeout(() => t.className = '', 3000);
+async function saveEdit(){
+  if(!editingName) return;
+  const body = {
+    description:        document.getElementById('ed-desc').value.trim(),
+    category:           document.getElementById('ed-cat').value,
+    status:             document.getElementById('ed-status').value,
+    ai_assigned:        document.getElementById('ed-ai').value,
+    current_task:       document.getElementById('ed-task').value.trim(),
+    next_action:        document.getElementById('ed-next').value.trim(),
+    ai_context_snippet: document.getElementById('ed-ctx').value.trim(),
+    link_repo:          document.getElementById('ed-repo').value.trim(),
+    link_deploy:        document.getElementById('ed-deploy').value.trim(),
+    notes:              document.getElementById('ed-notes').value.trim(),
+    pinned:             document.getElementById('ed-pinned').checked,
+  };
+  try{
+    await fetch(`${API}/api/projects/${encodeURIComponent(editingName)}`,{
+      method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)
+    });
+    closeModal('edit-ov');
+    toast(`Saved ${editingName}`,'ok');
+    await loadProjects();
+  } catch(e){ toast('Save failed','err'); }
 }
 
-function escHtml(s) {
-  if (!s) return '';
+// ── Git ────────────────────────────────────────────────────────────
+async function openGitModal(name){
+  document.getElementById('git-title').textContent = name;
+  document.getElementById('git-status-block').textContent='Loading…';
+  document.getElementById('git-log-block').textContent='Loading…';
+  document.getElementById('git-ov').classList.add('open');
+  try{
+    const res  = await fetch(`${API}/api/projects/${encodeURIComponent(name)}/git`);
+    const data = await res.json();
+    const sb   = document.getElementById('git-status-block');
+    if(!data.status||data.status==='Not a git repository'){ sb.textContent=data.status||'Not a git repo'; }
+    else{ sb.innerHTML=data.status.split('\n').map(l=>{
+      const pf=l.slice(0,2).trim();
+      const cls=pf==='??'?'ga':pf==='M'?'gm':pf==='D'?'gd':'';
+      return `<span class="${cls}">${esc(l)}</span>`;
+    }).join('\n');}
+    const lb=document.getElementById('git-log-block');
+    if(!data.log){lb.textContent='No commits yet';}
+    else{lb.innerHTML=data.log.split('\n').map(l=>{
+      const [h,...r]=l.split(' ');
+      return `<span class="gh">${esc(h)}</span> ${esc(r.join(' '))}`;
+    }).join('\n');}
+  } catch(e){ document.getElementById('git-status-block').textContent='Error'; }
+}
+
+// ── Helpers ────────────────────────────────────────────────────────
+function closeModal(id){ document.getElementById(id).classList.remove('open'); }
+
+function toast(msg,type='ok'){
+  const t=document.getElementById('toast');
+  t.textContent=msg; t.className=`show ${type}`;
+  setTimeout(()=>t.className='',3000);
+}
+
+function esc(s){
+  if(!s) return '';
   return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
-// Close modals on overlay click
-document.querySelectorAll('.modal-overlay').forEach(el => {
-  el.addEventListener('click', e => {
-    if (e.target === el) el.classList.remove('open');
-  });
+// ── Keyboard ───────────────────────────────────────────────────────
+document.addEventListener('keydown', e=>{
+  if(e.key==='Escape') document.querySelectorAll('.overlay').forEach(o=>o.classList.remove('open'));
+  if((e.ctrlKey||e.metaKey)&&e.key==='f'){ e.preventDefault(); document.getElementById('search').focus(); }
 });
 
-// Keyboard shortcut
-document.addEventListener('keydown', e => {
-  if (e.key === 'Escape') document.querySelectorAll('.modal-overlay').forEach(el => el.classList.remove('open'));
-  if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
-    e.preventDefault();
-    document.getElementById('search').focus();
-  }
+document.querySelectorAll('.overlay').forEach(el=>{
+  el.addEventListener('click', e=>{ if(e.target===el) el.classList.remove('open'); });
 });
 
+// ── Boot ───────────────────────────────────────────────────────────
+connectWS();
 loadProjects();
 </script>
 </body>
