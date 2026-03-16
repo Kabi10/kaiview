@@ -1,0 +1,1023 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Dev Manager</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --bg:       #0b0b10;
+    --surface:  #13131c;
+    --s2:       #1a1a26;
+    --s3:       #22222f;
+    --border:   #2a2a3e;
+    --border2:  #383850;
+    --text:     #e0e0ec;
+    --dim:      #7777a0;
+    --dimmer:   #444466;
+    --accent:   #7c3aed;
+    --accent-h: #9d5cf6;
+    --cyan:     #06b6d4;
+    --green:    #22c55e;
+    --yellow:   #f59e0b;
+    --red:      #ef4444;
+    --blue:     #3b82f6;
+    --orange:   #f97316;
+    --pink:     #ec4899;
+    --radius:   10px;
+    --radius-sm:6px;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Inter', sans-serif;
+    font-size: 14px;
+    display: flex;
+    height: 100vh;
+    overflow: hidden;
+  }
+
+  /* ── Sidebar ─────────────────────────────────────────── */
+  #sidebar {
+    width: 220px;
+    min-width: 220px;
+    background: var(--surface);
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    padding: 0;
+    overflow-y: auto;
+  }
+
+  .sb-logo {
+    padding: 20px 18px 14px;
+    border-bottom: 1px solid var(--border);
+  }
+  .sb-logo h1 {
+    font-size: 16px;
+    font-weight: 700;
+    letter-spacing: -0.3px;
+    color: var(--text);
+  }
+  .sb-logo span { color: var(--accent); }
+  .sb-logo p { font-size: 11px; color: var(--dim); margin-top: 2px; }
+
+  .sb-section { padding: 14px 12px 6px; }
+  .sb-section-label {
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 1px;
+    color: var(--dimmer);
+    text-transform: uppercase;
+    padding: 0 6px;
+    margin-bottom: 6px;
+  }
+
+  .sb-btn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 7px 8px;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    color: var(--dim);
+    font-size: 13px;
+    transition: all 0.15s;
+    user-select: none;
+    border: none;
+    background: none;
+    width: 100%;
+    text-align: left;
+  }
+  .sb-btn:hover { background: var(--s2); color: var(--text); }
+  .sb-btn.active { background: var(--s3); color: var(--text); }
+  .sb-btn .dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .sb-btn .count {
+    margin-left: auto;
+    font-size: 11px;
+    background: var(--s3);
+    color: var(--dim);
+    padding: 1px 6px;
+    border-radius: 20px;
+    min-width: 20px;
+    text-align: center;
+  }
+  .sb-btn.active .count { background: var(--accent); color: #fff; }
+
+  /* ── Main ────────────────────────────────────────────── */
+  #main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  /* ── Top bar ─────────────────────────────────────────── */
+  #topbar {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 12px 20px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-shrink: 0;
+  }
+
+  #search {
+    flex: 1;
+    background: var(--s2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    color: var(--text);
+    font-family: inherit;
+    font-size: 13px;
+    padding: 8px 12px 8px 36px;
+    outline: none;
+    transition: border 0.2s;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' fill='%237777a0' viewBox='0 0 16 16'%3E%3Cpath d='M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001l3.85 3.85a1 1 0 0 0 1.415-1.415l-3.85-3.85zm-5.242 1.156a5 5 0 1 1 0-10 5 5 0 0 1 0 10z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: 12px center;
+  }
+  #search:focus { border-color: var(--accent); }
+  #search::placeholder { color: var(--dim); }
+
+  .topbar-stat {
+    background: var(--s2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 6px 12px;
+    font-size: 12px;
+    color: var(--dim);
+    white-space: nowrap;
+  }
+  .topbar-stat strong { color: var(--text); font-weight: 600; }
+
+  #refresh-btn {
+    background: var(--s2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    color: var(--dim);
+    cursor: pointer;
+    padding: 7px 10px;
+    font-size: 15px;
+    transition: all 0.15s;
+  }
+  #refresh-btn:hover { background: var(--s3); color: var(--text); }
+  #refresh-btn.spinning { animation: spin 1s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ── Grid ────────────────────────────────────────────── */
+  #grid-area {
+    flex: 1;
+    overflow-y: auto;
+    padding: 18px 20px;
+  }
+
+  #grid-info {
+    font-size: 12px;
+    color: var(--dim);
+    margin-bottom: 14px;
+  }
+
+  #projects-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 14px;
+  }
+
+  /* ── Project Card ────────────────────────────────────── */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    transition: border-color 0.2s, transform 0.15s;
+    position: relative;
+    cursor: default;
+  }
+  .card:hover { border-color: var(--border2); transform: translateY(-1px); }
+  .card.pinned { border-color: var(--accent); }
+  .card.pinned::before {
+    content: '📌';
+    position: absolute;
+    top: 10px;
+    right: 12px;
+    font-size: 13px;
+  }
+
+  .card-header {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+  }
+
+  .card-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    flex-shrink: 0;
+  }
+
+  .card-title-area { flex: 1; min-width: 0; }
+  .card-name {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin-right: 20px;
+  }
+  .card-desc {
+    font-size: 12px;
+    color: var(--dim);
+    margin-top: 3px;
+    line-height: 1.4;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  .card-badges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+  }
+
+  .badge {
+    font-size: 11px;
+    font-weight: 500;
+    padding: 2px 8px;
+    border-radius: 20px;
+    white-space: nowrap;
+  }
+
+  /* Stack tags */
+  .tag {
+    font-size: 11px;
+    font-family: 'JetBrains Mono', monospace;
+    padding: 2px 7px;
+    border-radius: 4px;
+    background: var(--s3);
+    color: var(--dim);
+    border: 1px solid var(--border);
+  }
+
+  /* Git info */
+  .card-git {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--dim);
+    background: var(--s2);
+    padding: 6px 8px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border);
+  }
+  .git-branch { color: var(--cyan); }
+  .git-dirty { color: var(--yellow); }
+  .git-clean { color: var(--green); }
+  .git-time { margin-left: auto; font-size: 10px; }
+
+  /* AI Badge */
+  .ai-badge {
+    font-size: 11px;
+    font-weight: 600;
+    padding: 3px 9px;
+    border-radius: 20px;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  /* Card actions */
+  .card-actions {
+    display: flex;
+    gap: 6px;
+    margin-top: 2px;
+  }
+  .action-btn {
+    flex: 1;
+    padding: 6px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--s2);
+    color: var(--dim);
+    font-family: inherit;
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.15s;
+    text-align: center;
+  }
+  .action-btn:hover { background: var(--s3); color: var(--text); border-color: var(--border2); }
+  .action-btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .action-btn.primary:hover { background: var(--accent-h); }
+
+  /* ── Modals ──────────────────────────────────────────── */
+  .modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.7);
+    backdrop-filter: blur(4px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s;
+  }
+  .modal-overlay.open { opacity: 1; pointer-events: all; }
+
+  .modal {
+    background: var(--surface);
+    border: 1px solid var(--border2);
+    border-radius: 14px;
+    padding: 24px;
+    width: 500px;
+    max-width: 95vw;
+    max-height: 85vh;
+    overflow-y: auto;
+    transform: scale(0.95);
+    transition: transform 0.2s;
+  }
+  .modal-overlay.open .modal { transform: scale(1); }
+
+  .modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 20px;
+  }
+  .modal-header h2 { font-size: 16px; font-weight: 600; }
+  .modal-close {
+    background: var(--s2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--dim);
+    cursor: pointer;
+    padding: 4px 10px;
+    font-size: 16px;
+    line-height: 1;
+    transition: all 0.15s;
+  }
+  .modal-close:hover { background: var(--s3); color: var(--text); }
+
+  .form-group { margin-bottom: 16px; }
+  .form-label {
+    display: block;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--dim);
+    margin-bottom: 6px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .form-input, .form-select, .form-textarea {
+    width: 100%;
+    background: var(--s2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    color: var(--text);
+    font-family: inherit;
+    font-size: 13px;
+    padding: 9px 12px;
+    outline: none;
+    transition: border 0.2s;
+  }
+  .form-input:focus, .form-select:focus, .form-textarea:focus { border-color: var(--accent); }
+  .form-select option { background: var(--s2); }
+  .form-textarea { resize: vertical; min-height: 80px; line-height: 1.5; }
+
+  .form-row { display: flex; gap: 12px; }
+  .form-row .form-group { flex: 1; }
+
+  .form-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 20px; }
+  .btn {
+    padding: 8px 18px;
+    border-radius: var(--radius-sm);
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    border: 1px solid var(--border);
+    transition: all 0.15s;
+  }
+  .btn-ghost { background: var(--s2); color: var(--dim); }
+  .btn-ghost:hover { background: var(--s3); color: var(--text); }
+  .btn-primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .btn-primary:hover { background: var(--accent-h); }
+
+  /* Git modal */
+  .git-modal-content { font-family: 'JetBrains Mono', monospace; font-size: 12px; }
+  .git-section-title { font-size: 11px; font-weight: 600; color: var(--dim); text-transform: uppercase; letter-spacing: 1px; margin: 12px 0 6px; }
+  .git-block {
+    background: var(--s2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 10px 12px;
+    white-space: pre-wrap;
+    word-break: break-all;
+    color: var(--text);
+    line-height: 1.6;
+    max-height: 200px;
+    overflow-y: auto;
+  }
+  .git-block .hash { color: var(--yellow); }
+  .git-block .added { color: var(--green); }
+  .git-block .modified { color: var(--yellow); }
+  .git-block .deleted { color: var(--red); }
+
+  /* ── Status + Category colors ────────────────────────── */
+  .status-Active        { background: #052e16; color: var(--green);  border: 1px solid #166534; }
+  .status-InProgress    { background: #1e3a5f; color: var(--blue);   border: 1px solid #1d4ed8; }
+  .status-Paused        { background: #422006; color: var(--yellow); border: 1px solid #92400e; }
+  .status-Complete      { background: #1f2937; color: #9ca3af;       border: 1px solid #374151; }
+  .status-Archived      { background: #1f0a0a; color: var(--red);    border: 1px solid #7f1d1d; }
+
+  .cat-Android    { background: #052e16; color: var(--green);  border: 1px solid #166534; }
+  .cat-Web        { background: #1e3a5f; color: var(--blue);   border: 1px solid #1d4ed8; }
+  .cat-Backend    { background: #431407; color: var(--orange); border: 1px solid #9a3412; }
+  .cat-FullStack  { background: #2e1065; color: #c4b5fd;       border: 1px solid #5b21b6; }
+  .cat-Bot        { background: #083344; color: var(--cyan);   border: 1px solid #0e7490; }
+  .cat-Hardware   { background: #422006; color: var(--yellow); border: 1px solid #92400e; }
+  .cat-Python     { background: #1e3a5f; color: #93c5fd;       border: 1px solid #1e40af; }
+  .cat-Other      { background: #1f2937; color: #9ca3af;       border: 1px solid #374151; }
+
+  .ai-Claude   { background: #2e1065; color: #c4b5fd; border: 1px solid #5b21b6; }
+  .ai-DeepSeek { background: #083344; color: var(--cyan); border: 1px solid #0e7490; }
+  .ai-Gemini   { background: #1e3a5f; color: #93c5fd; border: 1px solid #1e40af; }
+  .ai-ChatGPT  { background: #052e16; color: var(--green); border: 1px solid #166534; }
+  .ai-Copilot  { background: #1f2937; color: #9ca3af; border: 1px solid #374151; }
+  .ai-None     { background: transparent; color: var(--dimmer); border: 1px solid var(--border); }
+
+  /* ── Loading + Empty ──────────────────────────────────── */
+  #loading {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 60px;
+    color: var(--dim);
+    gap: 12px;
+    font-size: 13px;
+    grid-column: 1/-1;
+  }
+  .loader {
+    width: 32px; height: 32px;
+    border: 3px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+
+  #empty-state {
+    grid-column: 1/-1;
+    text-align: center;
+    padding: 60px;
+    color: var(--dim);
+    font-size: 14px;
+  }
+
+  /* ── Scrollbar ───────────────────────────────────────── */
+  ::-webkit-scrollbar { width: 5px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 10px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--dimmer); }
+
+  /* ── Toast ───────────────────────────────────────────── */
+  #toast {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    background: var(--s3);
+    border: 1px solid var(--border2);
+    border-radius: var(--radius-sm);
+    padding: 10px 16px;
+    font-size: 13px;
+    z-index: 200;
+    opacity: 0;
+    transform: translateY(10px);
+    transition: all 0.25s;
+    pointer-events: none;
+  }
+  #toast.show { opacity: 1; transform: translateY(0); }
+  #toast.success { border-left: 3px solid var(--green); }
+  #toast.error   { border-left: 3px solid var(--red); }
+</style>
+</head>
+<body>
+
+<!-- ── SIDEBAR ──────────────────────────────────────────── -->
+<aside id="sidebar">
+  <div class="sb-logo">
+    <h1>Dev <span>Manager</span></h1>
+    <p>Project Dashboard</p>
+  </div>
+
+  <div class="sb-section">
+    <div class="sb-section-label">View</div>
+    <button class="sb-btn active" onclick="setFilter('all', this)">
+      <span>◈</span> All Projects <span class="count" id="count-all">0</span>
+    </button>
+    <button class="sb-btn" onclick="setFilter('pinned', this)">
+      <span>📌</span> Pinned <span class="count" id="count-pinned">0</span>
+    </button>
+  </div>
+
+  <div class="sb-section">
+    <div class="sb-section-label">Status</div>
+    <button class="sb-btn" onclick="setFilter('status:Active', this)">
+      <span class="dot" style="background:var(--green)"></span> Active <span class="count" id="count-active">0</span>
+    </button>
+    <button class="sb-btn" onclick="setFilter('status:In Progress', this)">
+      <span class="dot" style="background:var(--blue)"></span> In Progress <span class="count" id="count-inprogress">0</span>
+    </button>
+    <button class="sb-btn" onclick="setFilter('status:Paused', this)">
+      <span class="dot" style="background:var(--yellow)"></span> Paused <span class="count" id="count-paused">0</span>
+    </button>
+    <button class="sb-btn" onclick="setFilter('status:Complete', this)">
+      <span class="dot" style="background:#6b7280"></span> Complete <span class="count" id="count-complete">0</span>
+    </button>
+    <button class="sb-btn" onclick="setFilter('status:Archived', this)">
+      <span class="dot" style="background:var(--red)"></span> Archived <span class="count" id="count-archived">0</span>
+    </button>
+  </div>
+
+  <div class="sb-section">
+    <div class="sb-section-label">Category</div>
+    <button class="sb-btn" onclick="setFilter('cat:Android', this)">
+      <span>🤖</span> Android <span class="count" id="count-android">0</span>
+    </button>
+    <button class="sb-btn" onclick="setFilter('cat:Web', this)">
+      <span>🌐</span> Web <span class="count" id="count-web">0</span>
+    </button>
+    <button class="sb-btn" onclick="setFilter('cat:Backend', this)">
+      <span>⚡</span> Backend <span class="count" id="count-backend">0</span>
+    </button>
+    <button class="sb-btn" onclick="setFilter('cat:Bot', this)">
+      <span>💬</span> Bot <span class="count" id="count-bot">0</span>
+    </button>
+    <button class="sb-btn" onclick="setFilter('cat:Python', this)">
+      <span>🐍</span> Python <span class="count" id="count-python">0</span>
+    </button>
+    <button class="sb-btn" onclick="setFilter('cat:Hardware', this)">
+      <span>🔧</span> Hardware <span class="count" id="count-hardware">0</span>
+    </button>
+    <button class="sb-btn" onclick="setFilter('cat:Other', this)">
+      <span>📦</span> Other <span class="count" id="count-other">0</span>
+    </button>
+  </div>
+
+  <div class="sb-section">
+    <div class="sb-section-label">AI Assigned</div>
+    <button class="sb-btn" onclick="setFilter('ai:Claude', this)">
+      <span>🟣</span> Claude <span class="count" id="count-claude">0</span>
+    </button>
+    <button class="sb-btn" onclick="setFilter('ai:DeepSeek', this)">
+      <span>🔵</span> DeepSeek <span class="count" id="count-deepseek">0</span>
+    </button>
+    <button class="sb-btn" onclick="setFilter('ai:Gemini', this)">
+      <span>🌀</span> Gemini <span class="count" id="count-gemini">0</span>
+    </button>
+    <button class="sb-btn" onclick="setFilter('ai:ChatGPT', this)">
+      <span>🟢</span> ChatGPT <span class="count" id="count-chatgpt">0</span>
+    </button>
+    <button class="sb-btn" onclick="setFilter('ai:None', this)">
+      <span>⚪</span> Unassigned <span class="count" id="count-ai-none">0</span>
+    </button>
+  </div>
+</aside>
+
+<!-- ── MAIN ──────────────────────────────────────────────── -->
+<div id="main">
+  <div id="topbar">
+    <input id="search" type="text" placeholder="Search projects..." oninput="renderGrid()" />
+    <div class="topbar-stat">Total <strong id="stat-total">—</strong></div>
+    <div class="topbar-stat">Active <strong id="stat-active">—</strong></div>
+    <div class="topbar-stat">Git Repos <strong id="stat-git">—</strong></div>
+    <button id="refresh-btn" onclick="loadProjects()" title="Refresh">↻</button>
+  </div>
+
+  <div id="grid-area">
+    <div id="grid-info"></div>
+    <div id="projects-grid">
+      <div id="loading"><div class="loader"></div><span>Loading projects…</span></div>
+    </div>
+  </div>
+</div>
+
+<!-- ── EDIT MODAL ────────────────────────────────────────── -->
+<div class="modal-overlay" id="edit-overlay">
+  <div class="modal">
+    <div class="modal-header">
+      <h2>✏️ Edit Project — <span id="edit-name-title"></span></h2>
+      <button class="modal-close" onclick="closeModal('edit-overlay')">✕</button>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">Description</label>
+      <input class="form-input" id="edit-desc" placeholder="Brief description of this project" />
+    </div>
+
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Category</label>
+        <select class="form-select" id="edit-category">
+          <option>Android</option>
+          <option>Web</option>
+          <option>Backend</option>
+          <option>Full Stack</option>
+          <option>Bot</option>
+          <option>Hardware</option>
+          <option>Python</option>
+          <option>Other</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Status</label>
+        <select class="form-select" id="edit-status">
+          <option>Active</option>
+          <option>In Progress</option>
+          <option>Paused</option>
+          <option>Complete</option>
+          <option>Archived</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">AI Assigned</label>
+      <select class="form-select" id="edit-ai">
+        <option value="None">None</option>
+        <option value="Claude">Claude (Sonnet)</option>
+        <option value="Claude Opus">Claude (Opus)</option>
+        <option value="DeepSeek">DeepSeek</option>
+        <option value="Gemini">Gemini</option>
+        <option value="ChatGPT">ChatGPT</option>
+        <option value="Copilot">GitHub Copilot</option>
+      </select>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">Notes</label>
+      <textarea class="form-textarea" id="edit-notes" placeholder="Any private notes, TODOs, context…"></textarea>
+    </div>
+
+    <div class="form-group" style="display:flex; align-items:center; gap:10px;">
+      <input type="checkbox" id="edit-pinned" style="width:16px;height:16px;accent-color:var(--accent);" />
+      <label for="edit-pinned" style="font-size:13px; color:var(--dim); cursor:pointer;">Pin this project to the top</label>
+    </div>
+
+    <div class="form-actions">
+      <button class="btn btn-ghost" onclick="closeModal('edit-overlay')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveEdit()">Save Changes</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── GIT MODAL ─────────────────────────────────────────── -->
+<div class="modal-overlay" id="git-overlay">
+  <div class="modal">
+    <div class="modal-header">
+      <h2>⎇ Git Status — <span id="git-name-title"></span></h2>
+      <button class="modal-close" onclick="closeModal('git-overlay')">✕</button>
+    </div>
+    <div class="git-modal-content">
+      <div class="git-section-title">Working Tree Status</div>
+      <div class="git-block" id="git-status-block">Loading…</div>
+      <div class="git-section-title">Recent Commits</div>
+      <div class="git-block" id="git-log-block">Loading…</div>
+    </div>
+  </div>
+</div>
+
+<!-- ── TOAST ─────────────────────────────────────────────── -->
+<div id="toast"></div>
+
+<script>
+const API = '';
+let allProjects = [];
+let currentFilter = 'all';
+let editingProject = null;
+
+const CATEGORY_ICONS = {
+  Android: '🤖', Web: '🌐', Backend: '⚡', 'Full Stack': '🏗️',
+  Bot: '💬', Hardware: '🔧', Python: '🐍', Other: '📦'
+};
+
+const AI_ICONS = {
+  Claude: '🟣', 'Claude Opus': '🔮', DeepSeek: '🔵',
+  Gemini: '🌀', ChatGPT: '🟢', Copilot: '🤍', None: '⚪'
+};
+
+const STATUS_LABELS = {
+  Active: 'Active', 'In Progress': 'In Progress',
+  Paused: 'Paused', Complete: 'Complete', Archived: 'Archived'
+};
+
+function statusClass(s) {
+  return 'status-' + s.replace(' ', '');
+}
+function catClass(c) {
+  return 'cat-' + c.replace(' ', '');
+}
+function aiClass(a) {
+  const key = a.split(' ')[0];
+  return 'ai-' + key;
+}
+
+async function loadProjects() {
+  const btn = document.getElementById('refresh-btn');
+  btn.classList.add('spinning');
+
+  try {
+    const res = await fetch(`${API}/api/projects`);
+    allProjects = await res.json();
+    updateSidebarCounts();
+    renderGrid();
+    updateStats();
+  } catch(e) {
+    showToast('Failed to load projects. Is the server running?', 'error');
+  } finally {
+    btn.classList.remove('spinning');
+  }
+}
+
+function updateStats() {
+  document.getElementById('stat-total').textContent = allProjects.length;
+  document.getElementById('stat-active').textContent =
+    allProjects.filter(p => p.status === 'Active' || p.status === 'In Progress').length;
+  document.getElementById('stat-git').textContent =
+    allProjects.filter(p => p.git && p.git.is_git).length;
+}
+
+function updateSidebarCounts() {
+  const count = (fn) => allProjects.filter(fn).length;
+
+  document.getElementById('count-all').textContent = allProjects.length;
+  document.getElementById('count-pinned').textContent = count(p => p.pinned);
+  document.getElementById('count-active').textContent = count(p => p.status === 'Active');
+  document.getElementById('count-inprogress').textContent = count(p => p.status === 'In Progress');
+  document.getElementById('count-paused').textContent = count(p => p.status === 'Paused');
+  document.getElementById('count-complete').textContent = count(p => p.status === 'Complete');
+  document.getElementById('count-archived').textContent = count(p => p.status === 'Archived');
+
+  document.getElementById('count-android').textContent = count(p => p.category === 'Android');
+  document.getElementById('count-web').textContent = count(p => p.category === 'Web');
+  document.getElementById('count-backend').textContent = count(p => p.category === 'Backend');
+  document.getElementById('count-bot').textContent = count(p => p.category === 'Bot');
+  document.getElementById('count-python').textContent = count(p => p.category === 'Python');
+  document.getElementById('count-hardware').textContent = count(p => p.category === 'Hardware');
+  document.getElementById('count-other').textContent = count(p => p.category === 'Other');
+
+  document.getElementById('count-claude').textContent = count(p => p.ai_assigned && p.ai_assigned.startsWith('Claude'));
+  document.getElementById('count-deepseek').textContent = count(p => p.ai_assigned === 'DeepSeek');
+  document.getElementById('count-gemini').textContent = count(p => p.ai_assigned === 'Gemini');
+  document.getElementById('count-chatgpt').textContent = count(p => p.ai_assigned === 'ChatGPT');
+  document.getElementById('count-ai-none').textContent = count(p => !p.ai_assigned || p.ai_assigned === 'None');
+}
+
+function getFiltered() {
+  const query = document.getElementById('search').value.toLowerCase().trim();
+  return allProjects.filter(p => {
+    // Search
+    if (query) {
+      const match = p.name.toLowerCase().includes(query) ||
+        p.description.toLowerCase().includes(query) ||
+        p.stack.join(' ').toLowerCase().includes(query) ||
+        p.category.toLowerCase().includes(query);
+      if (!match) return false;
+    }
+    // Filter
+    if (currentFilter === 'all') return true;
+    if (currentFilter === 'pinned') return p.pinned;
+    if (currentFilter.startsWith('status:')) return p.status === currentFilter.slice(7);
+    if (currentFilter.startsWith('cat:')) return p.category === currentFilter.slice(4);
+    if (currentFilter.startsWith('ai:')) {
+      const ai = currentFilter.slice(3);
+      if (ai === 'Claude') return p.ai_assigned && p.ai_assigned.startsWith('Claude');
+      return p.ai_assigned === ai;
+    }
+    return true;
+  });
+}
+
+function renderGrid() {
+  const grid = document.getElementById('projects-grid');
+  const filtered = getFiltered();
+  const info = document.getElementById('grid-info');
+  info.textContent = `Showing ${filtered.length} of ${allProjects.length} projects`;
+
+  if (filtered.length === 0) {
+    grid.innerHTML = `<div id="empty-state">No projects match your filter.<br><span style="font-size:12px;color:var(--dimmer)">Try adjusting the search or filter.</span></div>`;
+    return;
+  }
+
+  grid.innerHTML = filtered.map(p => buildCard(p)).join('');
+}
+
+function buildCard(p) {
+  const git = p.git;
+  const icon = CATEGORY_ICONS[p.category] || '📦';
+  const aiIcon = AI_ICONS[p.ai_assigned] || '⚪';
+  const aiLabel = p.ai_assigned || 'None';
+
+  let gitHtml = '';
+  if (git && git.is_git) {
+    const dirtyBadge = git.dirty
+      ? `<span class="git-dirty">⬤ ${git.changes} change${git.changes !== 1 ? 's' : ''}</span>`
+      : `<span class="git-clean">⬤ clean</span>`;
+    gitHtml = `
+      <div class="card-git" onclick="openGitModal('${p.name}')" title="Click for git details" style="cursor:pointer">
+        <span class="git-branch">⎇ ${escHtml(git.branch)}</span>
+        ${dirtyBadge}
+        <span class="git-time">${escHtml(git.commit_time || '')}</span>
+      </div>`;
+  } else if (git) {
+    gitHtml = `<div class="card-git" style="color:var(--dimmer)">⚠ Not a git repo</div>`;
+  }
+
+  const stackTags = p.stack.slice(0, 4).map(s =>
+    `<span class="tag">${escHtml(s)}</span>`
+  ).join('');
+
+  const hasNotes = p.notes && p.notes.trim();
+
+  return `
+  <div class="card ${p.pinned ? 'pinned' : ''}" data-name="${escHtml(p.name)}">
+    <div class="card-header">
+      <div class="card-icon" style="background:var(--s3)">${icon}</div>
+      <div class="card-title-area">
+        <div class="card-name" title="${escHtml(p.name)}">${escHtml(p.name)}</div>
+        <div class="card-desc" title="${escHtml(p.description)}">${escHtml(p.description)}</div>
+      </div>
+    </div>
+
+    <div class="card-badges">
+      <span class="badge ${statusClass(p.status)}">${escHtml(p.status)}</span>
+      <span class="badge ${catClass(p.category)}">${icon} ${escHtml(p.category)}</span>
+      <span class="badge ai-badge ${aiClass(p.ai_assigned)}">${aiIcon} ${escHtml(aiLabel)}</span>
+      ${hasNotes ? `<span class="badge" style="background:var(--s3);color:var(--dim);border:1px solid var(--border)" title="${escHtml(p.notes)}">📝 Notes</span>` : ''}
+    </div>
+
+    <div style="display:flex;flex-wrap:wrap;gap:4px">${stackTags}</div>
+
+    ${gitHtml}
+
+    <div class="card-actions">
+      <button class="action-btn" onclick="openVSCode('${p.name}')">⬡ VS Code</button>
+      <button class="action-btn" onclick="openGitModal('${p.name}')">⎇ Git</button>
+      <button class="action-btn primary" onclick="openEditModal('${p.name}')">✏ Edit</button>
+    </div>
+  </div>`;
+}
+
+function setFilter(filter, btn) {
+  currentFilter = filter;
+  document.querySelectorAll('.sb-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  renderGrid();
+}
+
+function openEditModal(name) {
+  const p = allProjects.find(x => x.name === name);
+  if (!p) return;
+  editingProject = name;
+
+  document.getElementById('edit-name-title').textContent = name;
+  document.getElementById('edit-desc').value = p.description === 'No description yet.' ? '' : p.description;
+  document.getElementById('edit-category').value = p.category;
+  document.getElementById('edit-status').value = p.status;
+  document.getElementById('edit-ai').value = p.ai_assigned || 'None';
+  document.getElementById('edit-notes').value = p.notes || '';
+  document.getElementById('edit-pinned').checked = p.pinned || false;
+
+  document.getElementById('edit-overlay').classList.add('open');
+}
+
+async function saveEdit() {
+  if (!editingProject) return;
+  const body = {
+    description: document.getElementById('edit-desc').value.trim(),
+    category: document.getElementById('edit-category').value,
+    status: document.getElementById('edit-status').value,
+    ai_assigned: document.getElementById('edit-ai').value,
+    notes: document.getElementById('edit-notes').value.trim(),
+    pinned: document.getElementById('edit-pinned').checked,
+  };
+
+  try {
+    await fetch(`${API}/api/projects/${encodeURIComponent(editingProject)}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    closeModal('edit-overlay');
+    showToast(`Saved ${editingProject}`, 'success');
+    await loadProjects();
+  } catch(e) {
+    showToast('Save failed', 'error');
+  }
+}
+
+async function openGitModal(name) {
+  document.getElementById('git-name-title').textContent = name;
+  document.getElementById('git-status-block').textContent = 'Loading…';
+  document.getElementById('git-log-block').textContent = 'Loading…';
+  document.getElementById('git-overlay').classList.add('open');
+
+  try {
+    const res = await fetch(`${API}/api/projects/${encodeURIComponent(name)}/git`);
+    const data = await res.json();
+
+    const statusEl = document.getElementById('git-status-block');
+    if (!data.status || data.status === 'Not a git repository') {
+      statusEl.textContent = data.status || 'Not a git repository';
+    } else {
+      statusEl.innerHTML = data.status.split('\n').map(line => {
+        const prefix = line.slice(0, 2).trim();
+        const cls = prefix === '??' ? 'added' : prefix === 'M' ? 'modified' : prefix === 'D' ? 'deleted' : '';
+        return `<span class="${cls}">${escHtml(line)}</span>`;
+      }).join('\n');
+    }
+
+    const logEl = document.getElementById('git-log-block');
+    if (!data.log) {
+      logEl.textContent = 'No commits yet';
+    } else {
+      logEl.innerHTML = data.log.split('\n').map(line => {
+        const [hash, ...rest] = line.split(' ');
+        return `<span class="hash">${escHtml(hash)}</span> ${escHtml(rest.join(' '))}`;
+      }).join('\n');
+    }
+  } catch(e) {
+    document.getElementById('git-status-block').textContent = 'Error loading git info';
+    document.getElementById('git-log-block').textContent = '';
+  }
+}
+
+async function openVSCode(name) {
+  try {
+    await fetch(`${API}/api/projects/${encodeURIComponent(name)}/open`, { method: 'POST' });
+    showToast(`Opening ${name} in VS Code…`, 'success');
+  } catch(e) {
+    showToast('Could not open VS Code', 'error');
+  }
+}
+
+function closeModal(id) {
+  document.getElementById(id).classList.remove('open');
+}
+
+function showToast(msg, type = 'success') {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = `show ${type}`;
+  setTimeout(() => t.className = '', 3000);
+}
+
+function escHtml(s) {
+  if (!s) return '';
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// Close modals on overlay click
+document.querySelectorAll('.modal-overlay').forEach(el => {
+  el.addEventListener('click', e => {
+    if (e.target === el) el.classList.remove('open');
+  });
+});
+
+// Keyboard shortcut
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') document.querySelectorAll('.modal-overlay').forEach(el => el.classList.remove('open'));
+  if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
+    e.preventDefault();
+    document.getElementById('search').focus();
+  }
+});
+
+loadProjects();
+</script>
+</body>
+</html>
