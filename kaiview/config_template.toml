@@ -1,0 +1,15 @@
+[server]
+port = 3737
+
+[projects]
+dev_dir = "~"
+skip = [".git", "node_modules", "__pycache__", ".venv", "venv"]
+
+[github]
+pat = ""
+
+[health]
+commit_weight = 40
+dirty_weight = 20
+readme_weight = 20
+description_weight = 20
