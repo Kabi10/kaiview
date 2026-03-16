@@ -151,6 +151,29 @@ class JournalEntry(BaseModel):
     mood: str = "note"  # note | win | blocker | idea
 
 
+# ── Settings models ───────────────────────────────────────────────────────────
+
+class HealthWeights(BaseModel):
+    commit_weight:      int
+    dirty_weight:       int
+    readme_weight:      int
+    description_weight: int
+
+class SettingsResponse(BaseModel):
+    port:       int
+    dev_dir:    str
+    github_pat: str
+    skip:       list[str]
+    health:     HealthWeights
+
+class SettingsUpdate(BaseModel):
+    port:       int
+    dev_dir:    str
+    github_pat: str
+    skip:       list[str]
+    health:     HealthWeights
+
+
 # ── Database ──────────────────────────────────────────────────────────────────
 
 async def init_db():
@@ -1029,6 +1052,75 @@ async def get_stats():
             d[k] = d.get(k, 0) + 1
     return {"total": len(projects), "ai_counts": ai_c,
             "status_counts": st_c, "category_counts": cat_c, "lens_counts": lens_c}
+
+
+@app.get("/api/settings", response_model=SettingsResponse)
+def get_settings():
+    raw_pat = CFG.get("github", {}).get("pat", "")
+    return {
+        "port":       CFG.get("server", {}).get("port", 3737),
+        "dev_dir":    CFG.get("projects", {}).get("dev_dir", "~"),
+        "github_pat": "__MASKED__" if raw_pat else "",
+        "skip":       CFG.get("projects", {}).get("skip", []),
+        "health":     CFG.get("health", {
+            "commit_weight": 40, "dirty_weight": 20,
+            "readme_weight": 20, "description_weight": 20,
+        }),
+    }
+
+
+@app.post("/api/settings")
+def update_settings(body: SettingsUpdate):
+    from fastapi.responses import JSONResponse
+    global CFG, DEV_DIR, SKIP, GITHUB_TOKEN, HEALTH_CFG
+
+    dev_path = Path(body.dev_dir).expanduser().resolve()
+    if not dev_path.is_dir():
+        return JSONResponse(status_code=422, content={"error": f"Directory not found: {body.dev_dir}", "code": "dev_dir_not_found"})
+
+    if not (1024 <= body.port <= 65535):
+        return JSONResponse(status_code=422, content={"error": "Port must be 1024–65535", "code": "invalid_port"})
+
+    w = body.health
+    total = w.commit_weight + w.dirty_weight + w.readme_weight + w.description_weight
+    if total != 100:
+        return JSONResponse(status_code=422, content={"error": f"Weights must sum to 100 (got {total})", "code": "weights_dont_sum_to_100"})
+
+    existing_pat = CFG.get("github", {}).get("pat", "")
+    new_pat = existing_pat if body.github_pat == "__MASKED__" else body.github_pat
+    current_port = CFG.get("server", {}).get("port", 3737)
+
+    # Escape backslashes so Windows paths survive TOML round-trip (e.g. C:\Users → C:\\Users)
+    safe_dev_dir = body.dev_dir.replace("\\", "\\\\")
+    safe_new_pat = new_pat.replace("\\", "\\\\")
+    skip_toml = ", ".join(f'"{s}"' for s in body.skip)
+    new_toml = (
+        f'[server]\nport = {body.port}\n\n'
+        f'[projects]\ndev_dir = "{safe_dev_dir}"\nskip = [{skip_toml}]\n\n'
+        f'[github]\npat = "{safe_new_pat}"\n\n'
+        f'[health]\ncommit_weight = {w.commit_weight}\n'
+        f'dirty_weight = {w.dirty_weight}\n'
+        f'readme_weight = {w.readme_weight}\n'
+        f'description_weight = {w.description_weight}\n'
+    )
+    _CFG_FILE.write_text(new_toml, encoding="utf-8")
+
+    # Hot-reload in-memory config.
+    # DB_PATH is used via module global in every aiosqlite.connect(DB_PATH) call —
+    # aiosqlite opens a new connection per request (no pool), so reassigning
+    # the global works immediately. Port is written to disk ONLY; the running
+    # uvicorn instance is NOT restarted — user must restart kaiview manually.
+    CFG          = _load_config_from(_CFG_FILE)
+    DEV_DIR      = _dev_dir()
+    SKIP         = _skip_set()
+    GITHUB_TOKEN = CFG.get("github", {}).get("pat", "")
+    HEALTH_CFG   = CFG.get("health", {})
+
+    result: dict = {"ok": True}
+    if body.port != current_port:
+        result["restart_required"] = True
+        result["new_port"]         = body.port
+    return result
 
 
 @app.websocket("/ws")
