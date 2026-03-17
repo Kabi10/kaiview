@@ -2,7 +2,15 @@
 
 > Your AI-powered developer OS. One dashboard for every project on your machine.
 
-![KaiView Dashboard](docs/screenshot.png)
+![KaiView Grid View](docs/screenshot_grid.png)
+
+| Grid View | Kanban View |
+|---|---|
+| ![Grid](docs/screenshot_grid.png) | ![Kanban](docs/screenshot_kanban.png) |
+
+| Command Palette | Settings Panel |
+|---|---|
+| ![Command Palette](docs/screenshot_command_palette.png) | ![Settings](docs/screenshot_settings.png) |
 
 **KaiView** is a local-first developer dashboard that scans your project folders and gives you a live, intelligent view of everything you're building — git activity, tech stacks, AI context, session memory, and project health. No cloud. No subscriptions. One command to run.
 
