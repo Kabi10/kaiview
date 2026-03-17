@@ -489,7 +489,10 @@ def compute_health(path: Path, git: dict, stack: list, meta: dict) -> int:
 
 def detect_start_command(path: Path, stack: list) -> str:
     """Auto-detect the best command to start this project's dev environment."""
-    files = {f.name for f in path.iterdir() if f.is_file()} if path.exists() else set()
+    try:
+        files = {f.name for f in path.iterdir() if f.is_file()} if path.exists() else set()
+    except PermissionError:
+        files = set()
 
     if "Makefile" in files:
         return "make dev"
