@@ -2,7 +2,7 @@
 
 > Your AI-powered developer OS. One dashboard for every project on your machine.
 
-![KaiView Grid View](docs/screenshot_grid.png)
+![KaiView Grid View](docs/screenshot_kanban.png)
 
 | Grid View | Kanban View |
 |---|---|
