@@ -2,7 +2,7 @@
 
 > Your AI-powered developer OS. One dashboard for every project on your machine.
 
-![KaiView Logo](logo.png)
+![KaiView Dashboard](docs/screenshot.png)
 
 **KaiView** is a local-first developer dashboard that scans your project folders and gives you a live, intelligent view of everything you're building — git activity, tech stacks, AI context, session memory, and project health. No cloud. No subscriptions. One command to run.
 
@@ -24,6 +24,8 @@
 | ⬛ **Kanban view** | Board-style view grouped by status (Active / In Progress / Paused / Complete) |
 | 📓 **Project journal** | Per-project log with mood tags (Note / Win / Blocker / Idea) |
 | 🔎 **Full-text search** | Search across name, description, tasks, notes, AI context |
+| ⭐ **GitHub badges** | Stars, forks, open PRs, open issues, and CI status per project card |
+| ⚙️ **In-browser settings** | Edit your `config.toml` values directly in the dashboard — no file editing needed |
 
 ---
 
@@ -34,19 +36,16 @@
 git clone https://github.com/Kabi10/kaiview.git
 cd kaiview
 
-# 2. Install dependencies
-pip install -r requirements.txt
+# 2. Install
+pip install -e .
 
-# 3. Set your dev folder path (edit server.py line 15 if not C:/Dev)
-# DEV_DIR = Path("C:/Dev")
-
-# 4. Run
-python server.py
+# 3. Run
+kaiview
 ```
 
 Open **http://localhost:3737**
 
-> **First run:** KaiView auto-scans `DEV_DIR`. No config needed — git history, stack detection, and metadata are read automatically.
+> **First run:** KaiView auto-scans your dev folder. No config needed — git history, stack detection, and metadata are read automatically.
 
 ---
 
@@ -63,14 +62,22 @@ Open **http://localhost:3737**
 
 ## Configuration
 
-Edit the top of `server.py`:
+KaiView stores config at `~/.kaiview/config.toml`. Edit it directly or use the in-app **⚙ Settings** panel:
 
-```python
-DEV_DIR    = Path("C:/Dev")   # your projects root
-DB_PATH    = Path(__file__).parent / "kaiview.db"
+```toml
+[kaiview]
+dev_dir = "C:/Dev"       # your projects root
+port    = 3737
+
+[health]
+stale_days_warn  = 7
+stale_days_crit  = 30
+
+[github]
+pat = ""                 # optional — raises GitHub API rate limit from 60 to 5000 req/hr
 ```
 
-Projects in `SKIP` set are excluded from the dashboard.
+Projects listed in `skip` are excluded from the dashboard.
 
 ---
 
@@ -85,8 +92,11 @@ Projects in `SKIP` set are excluded from the dashboard.
 | `POST` | `/api/projects/{name}/launch` | Start/stop dev server |
 | `GET` | `/api/projects/{name}/git` | Git log + status |
 | `GET` | `/api/projects/{name}/deps` | Dependency list |
+| `GET` | `/api/projects/{name}/github` | GitHub stats (stars, forks, PRs, issues, CI) |
 | `GET` | `/api/projects/{name}/journal` | Journal entries |
 | `POST` | `/api/projects/{name}/journal` | Add journal entry |
+| `GET` | `/api/settings` | Read current config.toml |
+| `POST` | `/api/settings` | Update config.toml + hot-reload |
 | `GET` | `/api/search?q=` | Full-text search |
 | `GET` | `/api/stats` | Counts by lens/status/category/AI |
 | `WS` | `/ws` | Live git updates |
@@ -97,7 +107,7 @@ Projects in `SKIP` set are excluded from the dashboard.
 
 - **Backend:** Python 3.10+, FastAPI, uvicorn, aiosqlite
 - **Frontend:** Vanilla HTML/CSS/JS (zero npm, zero build step)
-- **Storage:** SQLite via aiosqlite (auto-migrates from legacy JSON)
+- **Storage:** SQLite via aiosqlite (`~/.kaiview/kaiview.db`)
 - **Git:** subprocess + git CLI
 
 ---
