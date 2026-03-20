@@ -15,8 +15,8 @@ from typing import Optional
 
 import aiosqlite
 import httpx
-from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
-from fastapi.responses import HTMLResponse
+from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
+from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import uvicorn
@@ -92,9 +92,17 @@ def _ensure_config() -> dict:
 CFG = _ensure_config()
 
 
-def _dev_dir() -> Path:
-    raw = CFG.get("projects", {}).get("dev_dir", "~")
-    return Path(raw).expanduser().resolve()
+def _dev_dirs() -> list[Path]:
+    """Return all project root directories. Supports dev_dirs (list) and legacy dev_dir (string)."""
+    proj = CFG.get("projects", {})
+    raw_list = proj.get("dev_dirs")
+    if raw_list and isinstance(raw_list, list):
+        paths = [Path(r).expanduser().resolve() for r in raw_list]
+    else:
+        raw = proj.get("dev_dir", "~")
+        paths = [Path(raw).expanduser().resolve()]
+    valid = [p for p in paths if p.is_dir()]
+    return valid if valid else [Path.home()]
 
 
 def _skip_set() -> set:
@@ -103,12 +111,22 @@ def _skip_set() -> set:
     ]))
 
 
-DEV_DIR      = _dev_dir()
+def _find_project_path(name: str) -> Path | None:
+    """Find a project directory by name across all configured roots."""
+    for d in DEV_DIRS:
+        p = d / name
+        if p.exists():
+            return p
+    return None
+
+
+DEV_DIRS     = _dev_dirs()
 SKIP         = _skip_set()
 DB_PATH      = _KAIVIEW_DIR / "kaiview.db"
 SCHEMA_VER   = 3
 GITHUB_TOKEN = CFG.get("github", {}).get("pat", "")
 HEALTH_CFG   = CFG.get("health", {})
+AUTH_TOKEN   = CFG.get("auth", {}).get("token", "")
 
 # Read HTML into memory at startup. importlib.resources.files() returns a Traversable,
 # NOT a filesystem Path in installed wheels. Always read the content directly.
@@ -116,6 +134,16 @@ _HTML_CONTENT: str = importlib.resources.files("kaiview").joinpath("index.html")
 
 app = FastAPI(title="KaiView")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
+
+
+@app.middleware("http")
+async def _auth_middleware(request: Request, call_next):
+    """If an auth token is configured, require it on all /api/* requests."""
+    if AUTH_TOKEN and request.url.path.startswith("/api/"):
+        auth_header = request.headers.get("Authorization", "")
+        if auth_header != f"Bearer {AUTH_TOKEN}":
+            return JSONResponse(status_code=401, content={"error": "Unauthorized — provide Authorization: Bearer <token>"})
+    return await call_next(request)
 
 ws_clients: list[WebSocket] = []
 
@@ -138,6 +166,10 @@ class ProjectUpdate(BaseModel):
     link_repo:          Optional[str]  = None
     link_docs:          Optional[str]  = None
     link_deploy:        Optional[str]  = None
+    github_url:         Optional[str]  = None
+    live_url:           Optional[str]  = None
+    docs_url:           Optional[str]  = None
+    deploy_url:         Optional[str]  = None
     tags:               Optional[list] = None
 
 class ParkRequest(BaseModel):
@@ -150,6 +182,12 @@ class JournalEntry(BaseModel):
     body: str
     mood: str = "note"  # note | win | blocker | idea
 
+class AiLogEntry(BaseModel):
+    model:   str = ""
+    topic:   str = ""
+    outcome: str = ""
+    notes:   str = ""
+
 
 # ── Settings models ───────────────────────────────────────────────────────────
 
@@ -160,18 +198,20 @@ class HealthWeights(BaseModel):
     description_weight: int
 
 class SettingsResponse(BaseModel):
-    port:       int
-    dev_dir:    str
-    github_pat: str
-    skip:       list[str]
-    health:     HealthWeights
+    port:        int
+    dev_dirs:    list[str]
+    github_pat:  str
+    auth_token:  str
+    skip:        list[str]
+    health:      HealthWeights
 
 class SettingsUpdate(BaseModel):
-    port:       int
-    dev_dir:    str
-    github_pat: str
-    skip:       list[str]
-    health:     HealthWeights
+    port:        int
+    dev_dirs:    list[str]
+    github_pat:  str
+    auth_token:  str
+    skip:        list[str]
+    health:      HealthWeights
 
 
 # ── Database ──────────────────────────────────────────────────────────────────
@@ -221,7 +261,8 @@ async def init_db():
                 logged_at     TEXT NOT NULL,
                 model         TEXT DEFAULT '',
                 topic         TEXT DEFAULT '',
-                outcome       TEXT DEFAULT ''
+                outcome       TEXT DEFAULT '',
+                notes         TEXT DEFAULT ''
             );
             CREATE TABLE IF NOT EXISTS journal (
                 id            INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -233,6 +274,29 @@ async def init_db():
         """)
 
         await db.execute("INSERT OR IGNORE INTO meta VALUES ('schema_version', ?)", (str(SCHEMA_VER),))
+
+        # ── Add new columns to existing tables if missing (safe migration) ──
+        existing_proj_cols = {
+            row[1] for row in await (
+                await db.execute("PRAGMA table_info(projects)")
+            ).fetchall()
+        }
+        for col, defn in [
+            ("github_url", "TEXT DEFAULT ''"),
+            ("live_url",   "TEXT DEFAULT ''"),
+            ("docs_url",   "TEXT DEFAULT ''"),
+            ("deploy_url", "TEXT DEFAULT ''"),
+        ]:
+            if col not in existing_proj_cols:
+                await db.execute(f"ALTER TABLE projects ADD COLUMN {col} {defn}")
+
+        existing_log_cols = {
+            row[1] for row in await (
+                await db.execute("PRAGMA table_info(ai_logs)")
+            ).fetchall()
+        }
+        if "notes" not in existing_log_cols:
+            await db.execute("ALTER TABLE ai_logs ADD COLUMN notes TEXT DEFAULT ''")
 
         # ── Migrate from JSON if exists and not yet migrated
         json_path = Path(__file__).parent / "projects_meta.json"
@@ -622,15 +686,22 @@ running_processes: dict[str, subprocess.Popen] = {}
 
 async def build_project(item: Path) -> dict:
     # DB read (async) + all blocking I/O in thread pool — run in parallel
-    meta, stack, git = await asyncio.gather(
+    meta, stack, git, gh_remote = await asyncio.gather(
         db_get_project(item.name),
         asyncio.to_thread(detect_stack, item),
         asyncio.to_thread(get_git_info, item),
+        asyncio.to_thread(_parse_github_remote, item),
     )
     days         = git.get("days_since_commit", 999)
     status       = meta.get("status", "Active")
     dirty        = git.get("dirty", False)
     current_task = meta.get("current_task", "")
+
+    # Auto-populate github_url from git remote if not already stored
+    auto_github_url = ""
+    if gh_remote:
+        owner, repo = gh_remote
+        auto_github_url = f"https://github.com/{owner}/{repo}"
 
     description = meta.get("description", "") or await asyncio.to_thread(get_readme_desc, item) or "No description yet."
     category    = meta.get("category") or auto_category(item.name, stack)
@@ -662,6 +733,10 @@ async def build_project(item: Path) -> dict:
         "link_repo":          meta.get("link_repo", ""),
         "link_docs":          meta.get("link_docs", ""),
         "link_deploy":        meta.get("link_deploy", ""),
+        "github_url":         meta.get("github_url", "") or auto_github_url,
+        "live_url":           meta.get("live_url", ""),
+        "docs_url":           meta.get("docs_url", ""),
+        "deploy_url":         meta.get("deploy_url", ""),
         "stack":              stack,
         "git":                git,
         "staleness":          staleness,
@@ -714,7 +789,9 @@ class _GitEventHandler(FileSystemEventHandler):
 
 
 async def _broadcast_git_change(name: str):
-    path = DEV_DIR / name
+    path = _find_project_path(name)
+    if not path:
+        return
     git  = await asyncio.to_thread(get_git_info, path)
     if git.get("is_git") and ws_clients:
         await broadcast({
@@ -725,15 +802,23 @@ async def _broadcast_git_change(name: str):
 
 
 def _start_watchdog():
-    """Start a watchdog Observer for every git project (runs in background thread)."""
+    """Start a watchdog Observer for every git project across all dev roots."""
     observer = Observer()
-    for item in DEV_DIR.iterdir():
-        if not item.is_dir() or item.name in SKIP or item.name.startswith("."):
-            continue
-        git_dir = item / ".git"
-        if git_dir.is_dir():
-            handler = _GitEventHandler(item.name)
-            observer.schedule(handler, str(git_dir), recursive=True)
+    seen: set[str] = set()
+    for dev_dir in DEV_DIRS:
+        try:
+            for item in dev_dir.iterdir():
+                if not item.is_dir() or item.name in SKIP or item.name.startswith("."):
+                    continue
+                if item.name in seen:
+                    continue
+                seen.add(item.name)
+                git_dir = item / ".git"
+                if git_dir.is_dir():
+                    handler = _GitEventHandler(item.name)
+                    observer.schedule(handler, str(git_dir), recursive=True)
+        except Exception:
+            pass
     observer.start()
     return observer
 
@@ -778,11 +863,18 @@ def root():
 
 
 def _scan_dir() -> list[Path]:
-    """Synchronous filesystem scan — called via asyncio.to_thread."""
-    return sorted(
-        p for p in DEV_DIR.iterdir()
-        if p.is_dir() and p.name not in SKIP and not p.name.startswith(".")
-    )
+    """Synchronous filesystem scan across all dev roots — called via asyncio.to_thread."""
+    seen: set[str] = set()
+    result: list[Path] = []
+    for dev_dir in DEV_DIRS:
+        try:
+            for p in dev_dir.iterdir():
+                if p.is_dir() and p.name not in SKIP and not p.name.startswith(".") and p.name not in seen:
+                    seen.add(p.name)
+                    result.append(p)
+        except Exception:
+            pass
+    return sorted(result, key=lambda p: p.name.lower())
 
 
 @app.get("/api/projects")
@@ -807,8 +899,8 @@ async def update_project(name: str, update: ProjectUpdate):
 
 @app.post("/api/projects/{name}/resume")
 async def resume_project(name: str):
-    path = DEV_DIR / name
-    if not path.exists():
+    path = _find_project_path(name)
+    if not path:
         raise HTTPException(404)
     now = datetime.now(timezone.utc).isoformat()
     async with aiosqlite.connect(DB_PATH) as db:
@@ -866,8 +958,8 @@ async def park_project(name: str, body: ParkRequest):
 
 @app.post("/api/projects/{name}/open")
 def open_vscode(name: str):
-    path = DEV_DIR / name
-    if not path.exists():
+    path = _find_project_path(name)
+    if not path:
         raise HTTPException(404)
     subprocess.Popen(["code", str(path)], shell=False)
     return {"ok": True}
@@ -876,8 +968,8 @@ def open_vscode(name: str):
 @app.post("/api/projects/{name}/launch")
 async def launch_project(name: str):
     """Start the project's dev environment in a terminal."""
-    path = DEV_DIR / name
-    if not path.exists():
+    path = _find_project_path(name)
+    if not path:
         raise HTTPException(404)
 
     # Kill if already running
@@ -909,8 +1001,8 @@ async def launch_project(name: str):
 @app.get("/api/projects/{name}/deps")
 def scan_deps(name: str):
     """Scan dependency files and return a summary."""
-    path = DEV_DIR / name
-    if not path.exists():
+    path = _find_project_path(name)
+    if not path:
         raise HTTPException(404)
 
     result: dict = {"name": name, "deps": [], "warnings": []}
@@ -954,8 +1046,8 @@ def scan_deps(name: str):
 @app.get("/api/projects/{name}/github")
 async def github_data(name: str):
     """Return cached GitHub stats (stars, forks, open PRs, CI status)."""
-    path = DEV_DIR / name
-    if not path.exists():
+    path = _find_project_path(name)
+    if not path:
         raise HTTPException(404)
     data = await fetch_github_data(path, name)
     return data
@@ -963,8 +1055,8 @@ async def github_data(name: str):
 
 @app.get("/api/projects/{name}/git")
 def git_details(name: str):
-    path = DEV_DIR / name
-    if not path.exists():
+    path = _find_project_path(name)
+    if not path:
         raise HTTPException(404)
     try:
         log = subprocess.check_output(
@@ -1024,6 +1116,177 @@ async def delete_journal(entry_id: int):
     return {"ok": True}
 
 
+@app.get("/api/projects/{name}/ai-logs")
+async def get_ai_logs(name: str):
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        rows = await (await db.execute(
+            "SELECT * FROM ai_logs WHERE project_name=? ORDER BY logged_at DESC",
+            (name,)
+        )).fetchall()
+        return [dict(r) for r in rows]
+
+
+@app.post("/api/projects/{name}/ai-logs")
+async def add_ai_log(name: str, entry: AiLogEntry):
+    now = datetime.now(timezone.utc).isoformat()
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute(
+            "INSERT INTO ai_logs (project_name, logged_at, model, topic, outcome, notes) VALUES (?,?,?,?,?,?)",
+            (name, now, entry.model, entry.topic, entry.outcome, entry.notes)
+        )
+        await db.commit()
+    return {"ok": True}
+
+
+@app.delete("/api/ai-logs/{log_id}")
+async def delete_ai_log(log_id: int):
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute("DELETE FROM ai_logs WHERE id=?", (log_id,))
+        await db.commit()
+    return {"ok": True}
+
+
+# ── Cross-project file search ─────────────────────────────────────────────────
+
+_SEARCH_SKIP = {"node_modules", ".git", "__pycache__", "venv", ".venv", "dist", "build", ".next"}
+_MAX_SEARCH_RESULTS = 200
+
+
+def _rg_search(q: str, root: Path, project: str | None) -> list[dict]:
+    """Search using ripgrep if available."""
+    results = []
+    search_dirs = []
+    if project:
+        p = root / project
+        if p.is_dir():
+            search_dirs = [p]
+    else:
+        try:
+            search_dirs = [
+                d for d in root.iterdir()
+                if d.is_dir() and d.name not in SKIP and not d.name.startswith(".")
+            ]
+        except Exception:
+            return []
+
+    for sdir in search_dirs:
+        proj_name = sdir.name
+        try:
+            proc = subprocess.run(
+                [
+                    "rg", "--line-number", "--no-heading", "--with-filename",
+                    "--max-count=50", "--max-filesize=500K",
+                    "--glob=!node_modules", "--glob=!.git", "--glob=!__pycache__",
+                    "--glob=!venv", "--glob=!.venv", "--glob=!dist", "--glob=!build",
+                    "-e", q,
+                    str(sdir),
+                ],
+                capture_output=True, text=True, timeout=15
+            )
+            for line in proc.stdout.splitlines():
+                parts = line.split(":", 2)
+                if len(parts) < 3:
+                    continue
+                file_abs, lineno, content = parts[0], parts[1], parts[2]
+                try:
+                    rel = Path(file_abs).relative_to(sdir)
+                except ValueError:
+                    rel = Path(file_abs).name
+                results.append({
+                    "project": proj_name,
+                    "file":    str(rel).replace("\\", "/"),
+                    "line":    int(lineno) if lineno.isdigit() else 0,
+                    "content": content.strip()[:200],
+                })
+                if len(results) >= _MAX_SEARCH_RESULTS:
+                    return results
+        except Exception:
+            pass
+    return results
+
+
+def _py_search(q: str, root: Path, project: str | None) -> list[dict]:
+    """Pure-Python fallback search using pathlib + re."""
+    results = []
+    pattern = re.compile(re.escape(q), re.IGNORECASE)
+
+    if project:
+        proj_dirs = [(project, root / project)]
+    else:
+        try:
+            proj_dirs = [
+                (d.name, d) for d in sorted(root.iterdir())
+                if d.is_dir() and d.name not in SKIP and not d.name.startswith(".")
+            ]
+        except Exception:
+            return []
+
+    for proj_name, sdir in proj_dirs:
+        try:
+            for fpath in sdir.rglob("*"):
+                # Skip unwanted dirs
+                if any(part in _SEARCH_SKIP for part in fpath.parts):
+                    continue
+                if not fpath.is_file():
+                    continue
+                # Skip likely binary files by extension
+                if fpath.suffix.lower() in {
+                    ".png", ".jpg", ".jpeg", ".gif", ".ico", ".svg", ".woff",
+                    ".woff2", ".ttf", ".eot", ".otf", ".pdf", ".zip", ".gz",
+                    ".tar", ".bin", ".exe", ".dll", ".so", ".pyc", ".class",
+                    ".db", ".sqlite", ".sqlite3",
+                }:
+                    continue
+                try:
+                    text = fpath.read_text(encoding="utf-8", errors="ignore")
+                except Exception:
+                    continue
+                for lineno, line in enumerate(text.splitlines(), 1):
+                    if pattern.search(line):
+                        try:
+                            rel = fpath.relative_to(sdir)
+                        except ValueError:
+                            rel = fpath.name
+                        results.append({
+                            "project": proj_name,
+                            "file":    str(rel).replace("\\", "/"),
+                            "line":    lineno,
+                            "content": line.strip()[:200],
+                        })
+                        if len(results) >= _MAX_SEARCH_RESULTS:
+                            return results
+        except Exception:
+            pass
+    return results
+
+
+@app.get("/api/search/files")
+async def search_files(q: str = "", project: str = ""):
+    """Cross-project file content search. Uses rg if available, falls back to Python."""
+    if not q or len(q.strip()) < 2:
+        return []
+    q = q.strip()
+    proj = project.strip() or None
+
+    # Try ripgrep first
+    rg_available = await asyncio.to_thread(lambda: bool(subprocess.run(
+        ["rg", "--version"], capture_output=True, timeout=3
+    ).returncode == 0))
+
+    all_results: list[dict] = []
+    for dev_dir in DEV_DIRS:
+        if rg_available:
+            chunk = await asyncio.to_thread(_rg_search, q, dev_dir, proj)
+        else:
+            chunk = await asyncio.to_thread(_py_search, q, dev_dir, proj)
+        all_results.extend(chunk)
+        if len(all_results) >= _MAX_SEARCH_RESULTS:
+            break
+
+    return all_results[:_MAX_SEARCH_RESULTS]
+
+
 @app.get("/api/search")
 async def search_all(q: str = ""):
     """Full-text search across project name, description, notes, current_task, ai_context."""
@@ -1059,12 +1322,17 @@ async def get_stats():
 
 @app.get("/api/settings", response_model=SettingsResponse)
 def get_settings():
-    raw_pat = CFG.get("github", {}).get("pat", "")
+    raw_pat   = CFG.get("github", {}).get("pat", "")
+    raw_token = CFG.get("auth", {}).get("token", "")
+    proj      = CFG.get("projects", {})
+    # Return dev_dirs; fall back to legacy dev_dir if present
+    dev_dirs  = proj.get("dev_dirs") or [proj.get("dev_dir", "~")]
     return {
         "port":       CFG.get("server", {}).get("port", 3737),
-        "dev_dir":    CFG.get("projects", {}).get("dev_dir", "~"),
+        "dev_dirs":   dev_dirs,
         "github_pat": "__MASKED__" if raw_pat else "",
-        "skip":       CFG.get("projects", {}).get("skip", []),
+        "auth_token": "__MASKED__" if raw_token else "",
+        "skip":       proj.get("skip", []),
         "health":     CFG.get("health", {
             "commit_weight": 40, "dirty_weight": 20,
             "readme_weight": 20, "description_weight": 20,
@@ -1074,12 +1342,15 @@ def get_settings():
 
 @app.post("/api/settings")
 def update_settings(body: SettingsUpdate):
-    from fastapi.responses import JSONResponse
-    global CFG, DEV_DIR, SKIP, GITHUB_TOKEN, HEALTH_CFG
+    global CFG, DEV_DIRS, SKIP, GITHUB_TOKEN, HEALTH_CFG, AUTH_TOKEN
 
-    dev_path = Path(body.dev_dir).expanduser().resolve()
-    if not dev_path.is_dir():
-        return JSONResponse(status_code=422, content={"error": f"Directory not found: {body.dev_dir}", "code": "dev_dir_not_found"})
+    # Validate all dev_dirs exist
+    if not body.dev_dirs:
+        return JSONResponse(status_code=422, content={"error": "dev_dirs must not be empty", "code": "dev_dirs_empty"})
+    for raw_dir in body.dev_dirs:
+        p = Path(raw_dir).expanduser().resolve()
+        if not p.is_dir():
+            return JSONResponse(status_code=422, content={"error": f"Directory not found: {raw_dir}", "code": "dev_dir_not_found"})
 
     if not (1024 <= body.port <= 65535):
         return JSONResponse(status_code=422, content={"error": "Port must be 1024–65535", "code": "invalid_port"})
@@ -1089,18 +1360,23 @@ def update_settings(body: SettingsUpdate):
     if total != 100:
         return JSONResponse(status_code=422, content={"error": f"Weights must sum to 100 (got {total})", "code": "weights_dont_sum_to_100"})
 
-    existing_pat = CFG.get("github", {}).get("pat", "")
-    new_pat = existing_pat if body.github_pat == "__MASKED__" else body.github_pat
+    existing_pat   = CFG.get("github", {}).get("pat", "")
+    existing_token = CFG.get("auth", {}).get("token", "")
+    new_pat   = existing_pat   if body.github_pat  == "__MASKED__" else body.github_pat
+    new_token = existing_token if body.auth_token  == "__MASKED__" else body.auth_token
     current_port = CFG.get("server", {}).get("port", 3737)
 
-    # Escape backslashes so Windows paths survive TOML round-trip (e.g. C:\Users → C:\\Users)
-    safe_dev_dir = body.dev_dir.replace("\\", "\\\\")
-    safe_new_pat = new_pat.replace("\\", "\\\\")
-    skip_toml = ", ".join(f'"{s}"' for s in body.skip)
+    # Build TOML — escape backslashes for Windows paths
+    def _safe(s: str) -> str:
+        return s.replace("\\", "\\\\")
+
+    dev_dirs_toml = ", ".join(f'"{_safe(d)}"' for d in body.dev_dirs)
+    skip_toml     = ", ".join(f'"{s}"' for s in body.skip)
     new_toml = (
         f'[server]\nport = {body.port}\n\n'
-        f'[projects]\ndev_dir = "{safe_dev_dir}"\nskip = [{skip_toml}]\n\n'
-        f'[github]\npat = "{safe_new_pat}"\n\n'
+        f'[projects]\ndev_dirs = [{dev_dirs_toml}]\nskip = [{skip_toml}]\n\n'
+        f'[github]\npat = "{_safe(new_pat)}"\n\n'
+        f'[auth]\ntoken = "{_safe(new_token)}"\n\n'
         f'[health]\ncommit_weight = {w.commit_weight}\n'
         f'dirty_weight = {w.dirty_weight}\n'
         f'readme_weight = {w.readme_weight}\n'
@@ -1108,16 +1384,13 @@ def update_settings(body: SettingsUpdate):
     )
     _CFG_FILE.write_text(new_toml, encoding="utf-8")
 
-    # Hot-reload in-memory config.
-    # DB_PATH is used via module global in every aiosqlite.connect(DB_PATH) call —
-    # aiosqlite opens a new connection per request (no pool), so reassigning
-    # the global works immediately. Port is written to disk ONLY; the running
-    # uvicorn instance is NOT restarted — user must restart kaiview manually.
+    # Hot-reload in-memory globals (port change requires manual restart)
     CFG          = _load_config_from(_CFG_FILE)
-    DEV_DIR      = _dev_dir()
+    DEV_DIRS     = _dev_dirs()
     SKIP         = _skip_set()
     GITHUB_TOKEN = CFG.get("github", {}).get("pat", "")
     HEALTH_CFG   = CFG.get("health", {})
+    AUTH_TOKEN   = CFG.get("auth", {}).get("token", "")
 
     result: dict = {"ok": True}
     if body.port != current_port:

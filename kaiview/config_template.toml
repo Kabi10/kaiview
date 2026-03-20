@@ -2,11 +2,16 @@
 port = 3737
 
 [projects]
-dev_dir = "~"
+dev_dirs = ["~"]
 skip = [".git", "node_modules", "__pycache__", ".venv", "venv"]
 
 [github]
 pat = ""
+
+[auth]
+# Optional: set a token to require "Authorization: Bearer <token>" on all /api/* requests.
+# Leave empty to disable auth (default for local use).
+token = ""
 
 [health]
 commit_weight = 40

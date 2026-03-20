@@ -297,6 +297,50 @@ body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;font-
 ::-webkit-scrollbar{width:5px}
 ::-webkit-scrollbar-track{background:transparent}
 ::-webkit-scrollbar-thumb{background:var(--border2);border-radius:10px}
+
+/* ── Project links bar ── */
+.card-links{display:flex;gap:5px;align-items:center;flex-wrap:wrap}
+.link-icon{display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:4px;background:var(--s2);border:1px solid var(--border);color:var(--dim);font-size:12px;text-decoration:none;transition:all .15s;cursor:pointer}
+.link-icon:hover{background:var(--s3);border-color:var(--border2);color:var(--text)}
+
+/* ── File search overlay ── */
+#filesearch-overlay{position:fixed;inset:0;background:rgba(0,0,0,.78);backdrop-filter:blur(5px);display:flex;align-items:flex-start;justify-content:center;padding-top:8vh;z-index:300;opacity:0;pointer-events:none;transition:opacity .18s}
+#filesearch-overlay.open{opacity:1;pointer-events:all}
+#filesearch-box{background:var(--sur);border:1px solid var(--border2);border-radius:14px;width:700px;max-width:96vw;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.7)}
+#fs-input-row{display:flex;gap:0;border-bottom:1px solid var(--border)}
+#fs-q{flex:1;background:transparent;border:none;color:var(--text);font-family:inherit;font-size:15px;padding:15px 18px;outline:none}
+#fs-proj{background:var(--s2);border:none;border-left:1px solid var(--border);color:var(--dim);font-family:inherit;font-size:13px;padding:0 12px;outline:none;cursor:pointer}
+#fs-proj option{background:var(--s2)}
+#fs-results{max-height:440px;overflow-y:auto}
+.fs-group{padding:8px 0}
+.fs-group-hdr{font-size:10px;font-weight:600;color:var(--dim);letter-spacing:1px;text-transform:uppercase;padding:4px 18px 4px;background:var(--s2);border-top:1px solid var(--border);border-bottom:1px solid var(--border)}
+.fs-hit{display:flex;align-items:baseline;gap:10px;padding:6px 18px;cursor:pointer;transition:background .1s;border-bottom:1px solid var(--border)}
+.fs-hit:hover{background:var(--s2)}
+.fs-hit:last-child{border-bottom:none}
+.fs-file{font-size:11px;font-family:'JetBrains Mono',monospace;color:var(--cyan);min-width:0;flex-shrink:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:260px}
+.fs-line{font-size:10px;color:var(--dimmer);flex-shrink:0;min-width:32px}
+.fs-content{font-size:11px;font-family:'JetBrains Mono',monospace;color:var(--text);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fs-hint{padding:8px 18px;font-size:11px;color:var(--dimmer);border-top:1px solid var(--border);display:flex;gap:14px}
+.fs-hint kbd{background:var(--s3);border:1px solid var(--border2);border-radius:3px;padding:1px 5px;font-family:inherit;font-size:10px}
+
+/* ── AI Log modal ── */
+.alog-row{display:flex;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);align-items:flex-start}
+.alog-row:last-child{border-bottom:none}
+.alog-meta{flex-shrink:0;min-width:80px}
+.alog-model{font-size:10px;font-weight:600;color:var(--accent);font-family:'JetBrains Mono',monospace}
+.alog-date{font-size:10px;color:var(--dimmer)}
+.alog-body{flex:1;min-width:0}
+.alog-topic{font-size:12px;font-weight:500;color:var(--text);margin-bottom:2px}
+.alog-outcome{font-size:11px;color:var(--dim);margin-bottom:2px}
+.alog-notes{font-size:11px;color:var(--dimmer);font-style:italic}
+.alog-del{background:none;border:none;color:var(--dimmer);cursor:pointer;font-size:12px;padding:1px 4px;border-radius:3px;flex-shrink:0}
+.alog-del:hover{color:var(--red)}
+.alog-list{max-height:220px;overflow-y:auto}
+/* modal tab system */
+.modal-tabs{display:flex;gap:0;border-bottom:1px solid var(--border);margin:-22px -22px 18px}
+.modal-tab{padding:10px 16px;font-size:12px;font-weight:500;color:var(--dim);cursor:pointer;border-bottom:2px solid transparent;transition:all .15s;background:none;border-top:none;border-left:none;border-right:none;font-family:inherit}
+.modal-tab:hover{color:var(--text)}
+.modal-tab.active{color:var(--text);border-bottom-color:var(--accent)}
 </style>
 </head>
 <body>
@@ -363,6 +407,9 @@ body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;font-
     <button class="tb-view-btn" id="vbtn-kanban" onclick="setMainView('kanban',this)">⬛ Kanban</button>
     <span id="refreshed" style="font-size:11px;color:var(--dimmer);white-space:nowrap"></span>
     <button id="refresh-btn" onclick="loadProjects()" title="Refresh (R)">↻</button>
+    <button onclick="openFileSearch()" title="File Content Search (Ctrl+Shift+F)"
+      style="background:none;border:none;cursor:pointer;font-size:1rem;
+             padding:4px 8px;opacity:0.65;color:inherit;" aria-label="Search file contents">🔍</button>
     <button id="settings-btn" onclick="openSettings()" title="Settings"
       style="background:none;border:none;cursor:pointer;font-size:1.1rem;
              padding:4px 8px;opacity:0.65;color:inherit;" aria-label="Open settings">⚙</button>
@@ -402,8 +449,16 @@ body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;font-
   <div class="fg"><label class="fl">Next Action</label><input class="fi" id="ed-next" placeholder="What's the very next thing to do?"/></div>
   <div class="fg"><label class="fl">AI Context Snippet</label><textarea class="fta" id="ed-ctx" placeholder="Context to paste into AI chats for this project…"></textarea></div>
   <div class="frow">
-    <div class="fg"><label class="fl">Repo URL</label><input class="fi" id="ed-repo" placeholder="https://github.com/…"/></div>
-    <div class="fg"><label class="fl">Deploy URL</label><input class="fi" id="ed-deploy" placeholder="https://…"/></div>
+    <div class="fg"><label class="fl">GitHub URL</label><input class="fi" id="ed-github-url" placeholder="https://github.com/owner/repo"/></div>
+    <div class="fg"><label class="fl">Live URL</label><input class="fi" id="ed-live-url" placeholder="https://myapp.com"/></div>
+  </div>
+  <div class="frow">
+    <div class="fg"><label class="fl">Docs URL</label><input class="fi" id="ed-docs-url" placeholder="https://docs.myapp.com"/></div>
+    <div class="fg"><label class="fl">Deploy URL</label><input class="fi" id="ed-deploy-url" placeholder="https://vercel.com/…"/></div>
+  </div>
+  <div class="frow">
+    <div class="fg"><label class="fl">Repo URL (legacy)</label><input class="fi" id="ed-repo" placeholder="https://github.com/…"/></div>
+    <div class="fg"><label class="fl">Deploy URL (legacy)</label><input class="fi" id="ed-deploy" placeholder="https://…"/></div>
   </div>
   <div class="fg"><label class="fl">Notes</label><textarea class="fta" id="ed-notes" placeholder="Private notes…"></textarea></div>
   <div class="fg" style="display:flex;align-items:center;gap:9px">
@@ -490,6 +545,42 @@ body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;font-
   <p style="font-size:11px;color:var(--dim);margin-bottom:12px">Scanned from requirements.txt, package.json, build.gradle.kts</p>
   <div class="deps-block" id="deps-list"><div style="padding:12px;color:var(--dim)">Loading…</div></div>
   <div style="font-size:11px;color:var(--dimmer);margin-top:8px" id="deps-count"></div>
+</div>
+</div>
+
+<!-- ── FILE SEARCH OVERLAY ── -->
+<div id="filesearch-overlay">
+  <div id="filesearch-box">
+    <div id="fs-input-row">
+      <input id="fs-q" placeholder="Search file contents across all projects…" oninput="fsSearch()" onkeydown="fsKey(event)" autocomplete="off"/>
+      <select id="fs-proj" onchange="fsSearch()">
+        <option value="">All projects</option>
+      </select>
+    </div>
+    <div id="fs-results"><div style="padding:14px 18px;font-size:12px;color:var(--dim)">Type to search file contents…</div></div>
+    <div class="fs-hint">
+      <span><kbd>Enter</kbd> open in VS Code</span>
+      <span><kbd>Esc</kbd> close</span>
+      <span><kbd>Ctrl+Shift+F</kbd> open</span>
+    </div>
+  </div>
+</div>
+
+<!-- ── AI LOG MODAL ── -->
+<div class="overlay" id="ailog-ov">
+<div class="modal" style="width:560px">
+  <div class="modal-hdr"><h2>🤖 AI Log — <span id="ailog-title"></span></h2><button class="modal-close" onclick="closeModal('ailog-ov')">✕</button></div>
+  <div class="fg" style="display:flex;gap:8px;flex-wrap:wrap">
+    <div style="flex:1;min-width:120px"><label class="fl">Model</label><input class="fi" id="al-model" placeholder="Claude Sonnet, GPT-4…"/></div>
+    <div style="flex:2;min-width:160px"><label class="fl">Topic</label><input class="fi" id="al-topic" placeholder="What was the session about?"/></div>
+  </div>
+  <div class="fg"><label class="fl">Outcome</label><input class="fi" id="al-outcome" placeholder="What was resolved/built/learned?"/></div>
+  <div class="fg" style="display:flex;gap:8px;align-items:flex-end">
+    <textarea class="fta" id="al-notes" placeholder="Extra notes (optional)…" style="flex:1;min-height:55px"></textarea>
+    <button class="btn btn-primary" onclick="saveAiLog()" style="align-self:flex-end;padding:9px 14px;white-space:nowrap">Add Log</button>
+  </div>
+  <div class="git-sec-lbl" style="margin-top:14px;margin-bottom:8px">Past Sessions</div>
+  <div class="alog-list" id="ailog-list"><div style="color:var(--dim);font-size:12px">Loading…</div></div>
 </div>
 </div>
 
@@ -762,6 +853,21 @@ function buildCard(p){
   const launchLbl = p.is_running ? '⏹ Stop' : '▶ Run';
   const launchTitle = p.start_command ? `${p.is_running?'Stop':'Run'}: ${p.start_command}` : 'No start command detected';
 
+  // Project links bar — only show icons that have values
+  const linkDefs = [
+    {key:'github_url', icon:'⎇',  title:'GitHub'},
+    {key:'live_url',   icon:'🌐', title:'Live site'},
+    {key:'docs_url',   icon:'📖', title:'Docs'},
+    {key:'deploy_url', icon:'🚀', title:'Deploy'},
+    {key:'link_repo',  icon:'🔗', title:'Repo'},
+    {key:'link_docs',  icon:'📄', title:'Docs'},
+    {key:'link_deploy',icon:'🛸', title:'Deploy'},
+  ];
+  const linksHtml = linkDefs
+    .filter(l => p[l.key])
+    .map(l => `<a class="link-icon" href="${esc(p[l.key])}" target="_blank" rel="noopener" title="${l.title}: ${esc(p[l.key])}">${l.icon}</a>`)
+    .join('');
+
   return `<div class="card${p.pinned?' pinned':''}" data-stale="${sl}" data-name="${nameEsc}">
     <div class="card-header">
       <div class="card-icon">${icon}</div>
@@ -784,11 +890,13 @@ function buildCard(p){
     <div class="stale-bar"><div class="stale-fill" style="width:${p.staleness}%;background:${sc_}"></div></div>
     ${gitHtml}
     <div class="gh-badge" id="ghb-${nameEsc}"></div>
+    ${linksHtml ? `<div class="card-links">${linksHtml}</div>` : ''}
     <div class="card-actions">
       <button class="act-btn resume" onclick="openResumeModal('${nameEsc}')">▶ Resume</button>
       <button class="act-btn park"   onclick="openParkModal('${nameEsc}')">⏸ Park</button>
       <button class="act-btn ${launchCls}" onclick="launchProject('${nameEsc}')" title="${esc(launchTitle)}" ${!p.start_command&&!p.is_running?'disabled style="opacity:.4;cursor:default"':''}>${launchLbl}</button>
       <button class="act-btn"        onclick="openJournalModal('${nameEsc}')" title="Project journal">📓</button>
+      <button class="act-btn"        onclick="openAiLogModal('${nameEsc}')" title="AI session log">🤖</button>
       <button class="act-btn"        onclick="openDepsModal('${nameEsc}')" title="Dependencies">📦</button>
       <button class="act-btn primary" onclick="openEditModal('${nameEsc}')">✏</button>
     </div>
@@ -871,10 +979,14 @@ function openEditModal(name){
   document.getElementById('ed-ai').value     = p.ai_assigned||'None';
   document.getElementById('ed-task').value   = p.current_task||'';
   document.getElementById('ed-next').value   = p.next_action||'';
-  document.getElementById('ed-ctx').value    = p.ai_context_snippet||'';
-  document.getElementById('ed-repo').value   = p.link_repo||'';
-  document.getElementById('ed-deploy').value = p.link_deploy||'';
-  document.getElementById('ed-notes').value  = p.notes||'';
+  document.getElementById('ed-ctx').value        = p.ai_context_snippet||'';
+  document.getElementById('ed-github-url').value = p.github_url||'';
+  document.getElementById('ed-live-url').value   = p.live_url||'';
+  document.getElementById('ed-docs-url').value   = p.docs_url||'';
+  document.getElementById('ed-deploy-url').value = p.deploy_url||'';
+  document.getElementById('ed-repo').value       = p.link_repo||'';
+  document.getElementById('ed-deploy').value     = p.link_deploy||'';
+  document.getElementById('ed-notes').value      = p.notes||'';
   document.getElementById('ed-pinned').checked = p.pinned||false;
   document.getElementById('edit-ov').classList.add('open');
 }
@@ -889,6 +1001,10 @@ async function saveEdit(){
     current_task:       document.getElementById('ed-task').value.trim(),
     next_action:        document.getElementById('ed-next').value.trim(),
     ai_context_snippet: document.getElementById('ed-ctx').value.trim(),
+    github_url:         document.getElementById('ed-github-url').value.trim(),
+    live_url:           document.getElementById('ed-live-url').value.trim(),
+    docs_url:           document.getElementById('ed-docs-url').value.trim(),
+    deploy_url:         document.getElementById('ed-deploy-url').value.trim(),
     link_repo:          document.getElementById('ed-repo').value.trim(),
     link_deploy:        document.getElementById('ed-deploy').value.trim(),
     notes:              document.getElementById('ed-notes').value.trim(),
@@ -1204,16 +1320,169 @@ function cmdRun(i){
   if(item) item.action();
 }
 
+// ── File Search ────────────────────────────────────────────────────
+let fsDebounce = null;
+
+function openFileSearch(){
+  // Populate project filter
+  const sel = document.getElementById('fs-proj');
+  const existing = new Set([...sel.options].map(o=>o.value));
+  allProjects.forEach(p=>{
+    if(!existing.has(p.name)){
+      const opt = document.createElement('option');
+      opt.value = p.name; opt.textContent = p.name;
+      sel.appendChild(opt);
+    }
+  });
+  document.getElementById('filesearch-overlay').classList.add('open');
+  document.getElementById('fs-q').focus();
+}
+
+function closeFileSearch(){
+  document.getElementById('filesearch-overlay').classList.remove('open');
+}
+
+function fsSearch(){
+  clearTimeout(fsDebounce);
+  fsDebounce = setTimeout(_doFsSearch, 350);
+}
+
+async function _doFsSearch(){
+  const q    = document.getElementById('fs-q').value.trim();
+  const proj = document.getElementById('fs-proj').value;
+  const res  = document.getElementById('fs-results');
+  if(!q || q.length < 2){
+    res.innerHTML='<div style="padding:14px 18px;font-size:12px;color:var(--dim)">Type at least 2 characters…</div>';
+    return;
+  }
+  res.innerHTML='<div style="padding:14px 18px;font-size:12px;color:var(--dim)">Searching…</div>';
+  try{
+    const params = new URLSearchParams({q});
+    if(proj) params.set('project', proj);
+    const r    = await fetch(`${API}/api/search/files?${params}`);
+    const hits = await r.json();
+    if(!hits.length){
+      res.innerHTML='<div style="padding:14px 18px;font-size:12px;color:var(--dim)">No matches found.</div>';
+      return;
+    }
+    // Group by project
+    const groups = {};
+    hits.forEach(h=>{ (groups[h.project]||(groups[h.project]=[])).push(h); });
+    res.innerHTML = Object.entries(groups).map(([proj,items])=>`
+      <div class="fs-group">
+        <div class="fs-group-hdr">📁 ${esc(proj)} <span style="color:var(--dimmer);font-weight:400">(${items.length})</span></div>
+        ${items.map(h=>`<div class="fs-hit" onclick="fsOpenFile('${esc(proj)}','${esc(h.file)}')">
+          <span class="fs-file" title="${esc(h.file)}">${esc(h.file)}</span>
+          <span class="fs-line">:${h.line}</span>
+          <span class="fs-content">${esc(h.content)}</span>
+        </div>`).join('')}
+      </div>`).join('');
+  } catch(e){
+    res.innerHTML='<div style="padding:14px 18px;font-size:12px;color:var(--red)">Search failed.</div>';
+  }
+}
+
+async function fsOpenFile(project, file){
+  try{
+    await fetch(`${API}/api/projects/${encodeURIComponent(project)}/open`,{method:'POST'});
+    toast(`Opened ${project} in VS Code`,'ok');
+  } catch(e){ toast('Could not open project','err'); }
+  closeFileSearch();
+}
+
+function fsKey(e){
+  if(e.key==='Escape'){ closeFileSearch(); return; }
+}
+
+document.getElementById('filesearch-overlay').addEventListener('click', e=>{
+  if(e.target===document.getElementById('filesearch-overlay')) closeFileSearch();
+});
+
+// ── AI Log ─────────────────────────────────────────────────────────
+let aiLogProject = null;
+
+async function openAiLogModal(name){
+  aiLogProject = name;
+  document.getElementById('ailog-title').textContent = name;
+  document.getElementById('al-model').value   = '';
+  document.getElementById('al-topic').value   = '';
+  document.getElementById('al-outcome').value = '';
+  document.getElementById('al-notes').value   = '';
+  document.getElementById('ailog-ov').classList.add('open');
+  await loadAiLogs(name);
+}
+
+async function loadAiLogs(name){
+  const el = document.getElementById('ailog-list');
+  el.innerHTML='<div style="color:var(--dim);font-size:12px">Loading…</div>';
+  try{
+    const res  = await fetch(`${API}/api/projects/${encodeURIComponent(name)}/ai-logs`);
+    const data = await res.json();
+    if(!data.length){
+      el.innerHTML='<div style="color:var(--dimmer);font-size:12px">No AI sessions logged yet.</div>';
+      return;
+    }
+    el.innerHTML = data.map(e=>{
+      const d  = new Date(e.logged_at);
+      const dt = d.toLocaleDateString(undefined,{month:'short',day:'numeric'}) + ' ' +
+                 d.toLocaleTimeString(undefined,{hour:'2-digit',minute:'2-digit'});
+      return `<div class="alog-row">
+        <div class="alog-meta">
+          <div class="alog-model">${esc(e.model||'?')}</div>
+          <div class="alog-date">${dt}</div>
+        </div>
+        <div class="alog-body">
+          ${e.topic?`<div class="alog-topic">${esc(e.topic)}</div>`:''}
+          ${e.outcome?`<div class="alog-outcome">${esc(e.outcome)}</div>`:''}
+          ${e.notes?`<div class="alog-notes">${esc(e.notes)}</div>`:''}
+        </div>
+        <button class="alog-del" onclick="deleteAiLog(${e.id},'${esc(name)}')">✕</button>
+      </div>`;
+    }).join('');
+  } catch(e){ el.innerHTML='<div style="color:var(--red);font-size:12px">Error loading logs.</div>'; }
+}
+
+async function saveAiLog(){
+  if(!aiLogProject) return;
+  const body = {
+    model:   document.getElementById('al-model').value.trim(),
+    topic:   document.getElementById('al-topic').value.trim(),
+    outcome: document.getElementById('al-outcome').value.trim(),
+    notes:   document.getElementById('al-notes').value.trim(),
+  };
+  if(!body.topic && !body.outcome){ toast('Please fill in at least topic or outcome','err'); return; }
+  try{
+    await fetch(`${API}/api/projects/${encodeURIComponent(aiLogProject)}/ai-logs`,{
+      method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)
+    });
+    document.getElementById('al-model').value   = '';
+    document.getElementById('al-topic').value   = '';
+    document.getElementById('al-outcome').value = '';
+    document.getElementById('al-notes').value   = '';
+    toast('AI session logged','ok');
+    await loadAiLogs(aiLogProject);
+  } catch(e){ toast('Failed to save log','err'); }
+}
+
+async function deleteAiLog(id, name){
+  try{
+    await fetch(`${API}/api/ai-logs/${id}`,{method:'DELETE'});
+    await loadAiLogs(name);
+  } catch(e){ toast('Failed to delete','err'); }
+}
+
 // ── Keyboard ───────────────────────────────────────────────────────
 document.addEventListener('keydown', e=>{
   const tag = document.activeElement.tagName.toLowerCase();
   const typing = tag==='input'||tag==='textarea'||tag==='select';
 
   if(e.key==='Escape'){
+    if(document.getElementById('filesearch-overlay').classList.contains('open')){ closeFileSearch(); return; }
     if(document.getElementById('cmd-overlay').classList.contains('open')){ closeCmd(); return; }
     document.querySelectorAll('.overlay').forEach(o=>o.classList.remove('open'));
   }
   if((e.ctrlKey||e.metaKey)&&e.key==='k'){ e.preventDefault(); openCmd(); return; }
+  if((e.ctrlKey||e.metaKey)&&e.shiftKey&&e.key==='F'){ e.preventDefault(); openFileSearch(); return; }
   if((e.ctrlKey||e.metaKey)&&e.key==='f'){ e.preventDefault(); document.getElementById('search').focus(); return; }
   if(!typing && e.key==='r'){ loadProjects(); }
 });
@@ -1246,14 +1515,15 @@ loadProjects();
     <section style="margin-bottom:18px;">
       <h3 style="font-size:.8rem;opacity:.5;text-transform:uppercase;letter-spacing:.08em;
                  margin:0 0 10px;">Projects</h3>
-      <label style="display:block;margin-bottom:12px;">
-        <span style="font-size:.85rem;display:block;margin-bottom:5px;">Projects folder</span>
-        <input id="s-devdir" type="text" placeholder="~/projects"
-               style="width:100%;box-sizing:border-box;padding:9px 12px;
-                      background:var(--input-bg,#252525);border:1px solid var(--border,#2e2e2e);
-                      border-radius:7px;color:inherit;font-size:.9rem;font-family:inherit;">
-        <span id="s-devdir-err" style="display:none;color:#f87171;font-size:.78rem;margin-top:4px;"></span>
-      </label>
+      <div style="margin-bottom:12px;">
+        <span style="font-size:.85rem;display:block;margin-bottom:6px;">Project folders</span>
+        <div id="s-devdirs-list" style="display:flex;flex-direction:column;gap:6px;margin-bottom:6px;"></div>
+        <button onclick="_addDevDir()"
+                style="font-size:.78rem;padding:5px 12px;background:none;
+                       border:1px dashed var(--border,#2e2e2e);border-radius:6px;
+                       cursor:pointer;color:inherit;opacity:.7;">+ Add folder</button>
+        <span id="s-devdir-err" style="display:none;color:#f87171;font-size:.78rem;margin-top:5px;display:block;"></span>
+      </div>
       <label style="display:block;">
         <span style="font-size:.85rem;display:block;margin-bottom:5px;">Skip folders (comma-separated)</span>
         <input id="s-skip" type="text" placeholder=".git, node_modules, __pycache__"
@@ -1275,6 +1545,24 @@ loadProjects();
         </span>
         <!-- PAT field: if masked, shows placeholder. Clear entirely to remove PAT, type new value to replace. -->
         <input id="s-pat" type="password" placeholder="ghp_... (blank to remove)"
+               style="width:100%;box-sizing:border-box;padding:9px 12px;
+                      background:var(--input-bg,#252525);border:1px solid var(--border,#2e2e2e);
+                      border-radius:7px;color:inherit;font-size:.9rem;font-family:monospace;">
+      </label>
+    </section>
+
+    <!-- Auth -->
+    <section style="margin-bottom:18px;">
+      <h3 style="font-size:.8rem;opacity:.5;text-transform:uppercase;letter-spacing:.08em;
+                 margin:0 0 10px;">Security</h3>
+      <label style="display:block;">
+        <span style="font-size:.85rem;display:block;margin-bottom:5px;">
+          Auth token
+          <span style="font-size:.75rem;opacity:.5;margin-left:8px;">
+            Required on all /api/* requests as "Authorization: Bearer &lt;token&gt;". Leave blank to disable.
+          </span>
+        </span>
+        <input id="s-auth-token" type="password" placeholder="(blank = no auth)"
                style="width:100%;box-sizing:border-box;padding:9px 12px;
                       background:var(--input-bg,#252525);border:1px solid var(--border,#2e2e2e);
                       border-radius:7px;color:inherit;font-size:.9rem;font-family:monospace;">
@@ -1334,11 +1622,47 @@ loadProjects();
   };
   let _origPort = 3737;
 
+  function _renderDevDirs(dirs) {
+    const list = document.getElementById('s-devdirs-list');
+    list.innerHTML = '';
+    (dirs && dirs.length ? dirs : ['']).forEach((dir, i) => {
+      list.insertAdjacentHTML('beforeend', `
+        <div style="display:flex;gap:6px;align-items:center;">
+          <input type="text" value="${dir}" placeholder="~/projects"
+                 data-devdir="${i}"
+                 style="flex:1;padding:8px 11px;background:var(--input-bg,#252525);
+                        border:1px solid var(--border,#2e2e2e);border-radius:7px;
+                        color:inherit;font-size:.88rem;font-family:inherit;box-sizing:border-box;">
+          ${dirs.length > 1 || (dirs.length === 1 && dir)
+            ? `<button onclick="_removeDevDir(${i})" title="Remove"
+                      style="background:none;border:none;cursor:pointer;color:#f87171;font-size:1rem;padding:0 4px;">✕</button>`
+            : ''}
+        </div>`);
+    });
+  }
+
+  window._addDevDir = function () {
+    const dirs = _getDevDirs();
+    dirs.push('');
+    _renderDevDirs(dirs);
+  };
+
+  window._removeDevDir = function (i) {
+    const dirs = _getDevDirs();
+    dirs.splice(i, 1);
+    _renderDevDirs(dirs.length ? dirs : ['']);
+  };
+
+  function _getDevDirs() {
+    return Array.from(document.querySelectorAll('#s-devdirs-list [data-devdir]'))
+      .map(el => el.value.trim());
+  }
+
   window.openSettings = async function () {
     const r = await fetch('/api/settings');
     const d = await r.json();
     _origPort = d.port;
-    document.getElementById('s-devdir').value = d.dev_dir || '';
+    _renderDevDirs(d.dev_dirs || [d.dev_dir || '~']);
     document.getElementById('s-skip').value   = (d.skip || []).join(', ');
     // If PAT is masked: show hint placeholder, keep field showing __MASKED__ as value.
     // User can clear the field entirely to delete the PAT, or type a new value to replace it.
@@ -1348,6 +1672,13 @@ loadProjects();
       patField.placeholder = 'PAT saved — clear to remove, or type to replace';
     } else {
       patField.placeholder = 'ghp_... (blank to remove)';
+    }
+    const tokenField = document.getElementById('s-auth-token');
+    tokenField.value = d.auth_token || '';
+    if (d.auth_token === '__MASKED__') {
+      tokenField.placeholder = 'Token set — clear to remove, or type to replace';
+    } else {
+      tokenField.placeholder = '(blank = no auth)';
     }
     document.getElementById('s-port').value    = d.port;
     document.getElementById('s-port-warn').style.display = 'none';
@@ -1409,17 +1740,19 @@ loadProjects();
     document.getElementById('s-devdir-err').style.display = 'none';
     const health = {};
     for (const k of WEIGHT_KEYS) health[k] = parseInt(document.getElementById('hw-' + k).value);
+    const devDirs = _getDevDirs().filter(Boolean);
     const body = {
-      dev_dir:    document.getElementById('s-devdir').value.trim(),
+      dev_dirs:   devDirs.length ? devDirs : ['~'],
       skip:       document.getElementById('s-skip').value.split(',').map(s => s.trim()).filter(Boolean),
       github_pat: document.getElementById('s-pat').value,
+      auth_token: document.getElementById('s-auth-token').value,
       port:       parseInt(document.getElementById('s-port').value),
       health,
     };
     const r    = await fetch('/api/settings', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body) });
     const data = await r.json();
     if (!r.ok) {
-      if (data.code === 'dev_dir_not_found') {
+      if (data.code === 'dev_dir_not_found' || data.code === 'dev_dirs_empty') {
         const el = document.getElementById('s-devdir-err');
         el.textContent = data.error; el.style.display = 'block';
       }
