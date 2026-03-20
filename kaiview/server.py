@@ -392,6 +392,19 @@ def detect_stack(path: Path) -> list:
 
 def get_git_info(path: Path) -> dict:
     try:
+        # Only treat as a git repo if this directory IS the repo root.
+        # This prevents picking up a parent repo (e.g. C:/Dev/.git) and
+        # showing its hundreds of cross-project changes.
+        git_root = subprocess.check_output(
+            ["git", "rev-parse", "--show-toplevel"],
+            cwd=str(path), stderr=subprocess.DEVNULL, text=True, timeout=5
+        ).strip()
+        try:
+            if Path(git_root).resolve() != path.resolve():
+                return {"is_git": False}
+        except Exception:
+            return {"is_git": False}
+
         branch = subprocess.check_output(
             ["git", "branch", "--show-current"],
             cwd=str(path), stderr=subprocess.DEVNULL, text=True, timeout=5
@@ -404,10 +417,24 @@ def get_git_info(path: Path) -> dict:
             cwd=str(path), stderr=subprocess.DEVNULL, text=True, timeout=5
         ).strip()
 
-        status_raw = subprocess.check_output(
-            ["git", "status", "--short"],
+        # Tracked changes only (staged + modified tracked files) — avoids inflated
+        # counts from untracked build artifacts / node_modules.
+        tracked_raw = subprocess.check_output(
+            ["git", "status", "--short", "--untracked-files=no"],
             cwd=str(path), stderr=subprocess.DEVNULL, text=True, timeout=5
         ).strip()
+
+        # Untracked dirs/files grouped at directory level (--untracked-files=normal).
+        # This counts node_modules/ as 1, not 40 000.
+        untracked_raw = subprocess.check_output(
+            ["git", "status", "--short", "--untracked-files=normal"],
+            cwd=str(path), stderr=subprocess.DEVNULL, text=True, timeout=5
+        ).strip()
+
+        tracked_lines   = tracked_raw.splitlines() if tracked_raw else []
+        untracked_lines = [l for l in (untracked_raw.splitlines() if untracked_raw else [])
+                           if l.startswith("??")]
+        changes = len(tracked_lines) + len(untracked_lines)
 
         parts       = raw.split("|||")
         commit_msg  = parts[0] if parts else ""
@@ -432,8 +459,8 @@ def get_git_info(path: Path) -> dict:
             "commit_hash":       commit_hash,
             "commit_ts":         commit_ts,
             "days_since_commit": round(days, 1),
-            "dirty":             bool(status_raw),
-            "changes":           len(status_raw.splitlines()) if status_raw else 0,
+            "dirty":             bool(tracked_raw or untracked_raw),
+            "changes":           changes,
         }
     except:
         return {"is_git": False}
