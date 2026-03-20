@@ -7,7 +7,7 @@ name = "kaiview"
 version = "1.0.0"
 description = "AI-powered developer OS dashboard"
 readme = "README.md"
-license = {text = "MIT"}
+license = "MIT"
 requires-python = ">=3.10"
 dependencies = [
     "fastapi>=0.100.0",
