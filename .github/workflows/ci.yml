@@ -7,7 +7,7 @@ on:
     branches: [main, master]
 
 jobs:
-  lint-and-import:
+  test:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -18,12 +18,15 @@ jobs:
           python-version: "3.11"
 
       - name: Install dependencies
-        run: pip install -r requirements.txt
+        run: pip install -e ".[dev]" || pip install -e . && pip install pytest httpx
 
-      - name: Check imports and syntax
-        run: python -c "import server; print('server.py imports OK')"
+      - name: Check package imports
+        run: python -c "import kaiview.server; print('kaiview.server imports OK')"
+
+      - name: Run tests
+        run: pytest tests/ -v
 
       - name: Lint with ruff (non-blocking)
         run: |
           pip install ruff
-          ruff check server.py --select E,W --ignore E501 || true
+          ruff check kaiview/ --select E,W --ignore E501 || true
