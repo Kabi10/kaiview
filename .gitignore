@@ -11,3 +11,6 @@ projects_meta.json
 local.properties
 .DS_Store
 Thumbs.db
+kaiview.db
+config.toml
+.kaiview/
