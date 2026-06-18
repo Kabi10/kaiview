@@ -12,7 +12,7 @@ def client(tmp_path):
     """TestClient with isolated config file."""
     import kaiview.server as srv
     cfg_text = (
-        '[server]\nport = 3737\n[projects]\ndev_dir = "~"\nskip = []\n'
+        '[server]\nport = 3737\n[projects]\ndev_dirs = ["~"]\nskip = []\n'
         '[github]\npat = ""\n[health]\ncommit_weight=40\ndirty_weight=20\n'
         'readme_weight=20\ndescription_weight=20\n'
     )
@@ -29,7 +29,7 @@ def test_get_settings_returns_expected_shape(client):
     r = client.get("/api/settings")
     assert r.status_code == 200
     d = r.json()
-    for key in ("port", "dev_dir", "github_pat", "skip", "health"):
+    for key in ("port", "dev_dirs", "github_pat", "skip", "health"):
         assert key in d, f"missing key: {key}"
     for w in ("commit_weight", "dirty_weight", "readme_weight", "description_weight"):
         assert w in d["health"]
@@ -58,7 +58,7 @@ def test_get_settings_empty_pat_returns_empty_string(client):
 
 def _valid_body(**overrides):
     body = {
-        "dev_dir": str(Path.home()),
+        "dev_dirs": [str(Path.home())],
         "port": 3737,
         "github_pat": "",
         "skip": [".git"],
