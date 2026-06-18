@@ -538,6 +538,22 @@ body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;font-
 </div>
 </div>
 
+
+<!-- ── TASKS MODAL ── -->
+<div class="overlay" id="tasks-ov">
+<div class="modal" style="width:520px">
+  <div class="modal-hdr"><h2>✅ Tasks — <span id="tasks-title"></span></h2><button class="modal-close" onclick="closeModal('tasks-ov')">✕</button></div>
+  <div class="fg" style="display:flex;gap:8px;align-items:center">
+    <input class="fi" id="task-input" placeholder="Add a task… (Enter to save)" style="flex:1" onkeydown="if(event.key==='Enter')saveTask()"/>
+    <button class="btn btn-primary" onclick="saveTask()" style="white-space:nowrap;padding:9px 14px">Add</button>
+  </div>
+  <div class="git-sec-lbl" style="margin-top:14px;margin-bottom:8px">Checklist</div>
+  <div id="task-list" style="display:flex;flex-direction:column;gap:6px;max-height:360px;overflow-y:auto">
+    <div style="color:var(--dim);font-size:12px">Loading…</div>
+  </div>
+</div>
+</div>
+
 <!-- ── DEPS MODAL ── -->
 <div class="overlay" id="deps-ov">
 <div class="modal">
@@ -895,6 +911,7 @@ function buildCard(p){
       <button class="act-btn resume" onclick="openResumeModal('${nameEsc}')">▶ Resume</button>
       <button class="act-btn park"   onclick="openParkModal('${nameEsc}')">⏸ Park</button>
       <button class="act-btn ${launchCls}" onclick="launchProject('${nameEsc}')" title="${esc(launchTitle)}" ${!p.start_command&&!p.is_running?'disabled style="opacity:.4;cursor:default"':''}>${launchLbl}</button>
+      <button class="act-btn"        onclick="openTasksModal('${nameEsc}')" title="Tasks checklist">✅</button>
       <button class="act-btn"        onclick="openJournalModal('${nameEsc}')" title="Project journal">📓</button>
       <button class="act-btn"        onclick="openAiLogModal('${nameEsc}')" title="AI session log">🤖</button>
       <button class="act-btn"        onclick="openDepsModal('${nameEsc}')" title="Dependencies">📦</button>
@@ -1158,6 +1175,60 @@ function buildKanbanCard(p){
     </div>
     ${p.current_task?`<div class="kb-card-task">→ ${esc(p.current_task)}</div>`:''}
   </div>`;
+}
+
+// ── Tasks (checklist) ────────────────────────────────────────────────────────
+let tasksProject = null;
+
+async function openTasksModal(name) {
+  tasksProject = name;
+  document.getElementById('tasks-title').textContent = name;
+  document.getElementById('task-input').value = '';
+  document.getElementById('tasks-ov').classList.add('open');
+  await loadTasks();
+}
+
+async function loadTasks() {
+  if (!tasksProject) return;
+  const res = await fetch(`/api/projects/${encodeURIComponent(tasksProject)}/tasks`);
+  const tasks = await res.json();
+  const el = document.getElementById('task-list');
+  if (!tasks.length) {
+    el.innerHTML = '<div style="color:var(--dim);font-size:12px">No tasks yet — add one above.</div>';
+    return;
+  }
+  el.innerHTML = tasks.map(t => `
+    <div class="task-row" data-id="${t.id}" style="display:flex;align-items:center;gap:10px;padding:8px 10px;background:var(--card);border-radius:8px;border:1px solid var(--border)">
+      <input type="checkbox" ${t.done ? 'checked' : ''} onchange="toggleTask(${t.id},this.checked)" style="width:16px;height:16px;cursor:pointer;accent-color:var(--accent)"/>
+      <span class="task-title" style="flex:1;font-size:13px;${t.done ? 'text-decoration:line-through;color:var(--dim)' : ''}">${esc(t.title)}</span>
+      <button onclick="deleteTask(${t.id})" style="background:none;border:none;cursor:pointer;color:var(--dim);font-size:14px;padding:2px 6px;border-radius:4px" title="Delete">✕</button>
+    </div>`).join('');
+}
+
+async function saveTask() {
+  const input = document.getElementById('task-input');
+  const title = input.value.trim();
+  if (!title || !tasksProject) return;
+  const res = await fetch(`/api/projects/${encodeURIComponent(tasksProject)}/tasks`, {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ title })
+  });
+  if (res.ok) { input.value = ''; await loadTasks(); }
+}
+
+async function toggleTask(id, done) {
+  await fetch(`/api/projects/${encodeURIComponent(tasksProject)}/tasks/${id}`, {
+    method: 'PATCH',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ done })
+  });
+  await loadTasks();
+}
+
+async function deleteTask(id) {
+  await fetch(`/api/projects/${encodeURIComponent(tasksProject)}/tasks/${id}`, { method: 'DELETE' });
+  await loadTasks();
 }
 
 // ── Journal ────────────────────────────────────────────────────────
