@@ -123,7 +123,7 @@ def _find_project_path(name: str) -> Path | None:
 DEV_DIRS     = _dev_dirs()
 SKIP         = _skip_set()
 DB_PATH      = _KAIVIEW_DIR / "kaiview.db"
-SCHEMA_VER   = 3
+SCHEMA_VER   = 4
 GITHUB_TOKEN = CFG.get("github", {}).get("pat", "")
 HEALTH_CFG   = CFG.get("health", {})
 AUTH_TOKEN   = CFG.get("auth", {}).get("token", "")
@@ -187,6 +187,16 @@ class AiLogEntry(BaseModel):
     topic:   str = ""
     outcome: str = ""
     notes:   str = ""
+
+
+class TaskCreate(BaseModel):
+    title:    str
+    position: int = 0
+
+class TaskUpdate(BaseModel):
+    title:    Optional[str]  = None
+    done:     Optional[bool] = None
+    position: Optional[int]  = None
 
 
 # ── Settings models ───────────────────────────────────────────────────────────
@@ -270,6 +280,15 @@ async def init_db():
                 logged_at     TEXT NOT NULL,
                 body          TEXT NOT NULL,
                 mood          TEXT DEFAULT 'note'
+            );
+            CREATE TABLE IF NOT EXISTS tasks (
+                id           INTEGER PRIMARY KEY AUTOINCREMENT,
+                project_name TEXT NOT NULL,
+                title        TEXT NOT NULL,
+                done         INTEGER DEFAULT 0,
+                position     INTEGER DEFAULT 0,
+                created_at   TEXT DEFAULT CURRENT_TIMESTAMP,
+                done_at      TEXT DEFAULT ''
             );
         """)
 
@@ -876,7 +895,7 @@ async def startup():
     _LOOP = asyncio.get_event_loop()
     await init_db()
     # Real-time watchdog (filesystem events) + slow fallback poll
-    asyncio.to_thread(_start_watchdog)
+    threading.Thread(target=_start_watchdog, daemon=True).start()
     asyncio.create_task(git_watcher())
     port = CFG.get("server", {}).get("port", 3737)
     print(f"KaiView running at http://localhost:{port}")
@@ -1139,6 +1158,64 @@ async def add_journal(name: str, entry: JournalEntry):
 async def delete_journal(entry_id: int):
     async with aiosqlite.connect(DB_PATH) as db:
         await db.execute("DELETE FROM journal WHERE id=?", (entry_id,))
+        await db.commit()
+    return {"ok": True}
+
+
+# ── Tasks (checklist) ─────────────────────────────────────────────────────────
+
+@app.get("/api/projects/{name}/tasks")
+async def get_tasks(name: str):
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        rows = await (await db.execute(
+            "SELECT * FROM tasks WHERE project_name=? ORDER BY position ASC, created_at ASC",
+            (name,)
+        )).fetchall()
+        return [dict(r) for r in rows]
+
+
+@app.post("/api/projects/{name}/tasks")
+async def create_task(name: str, task: TaskCreate):
+    now = datetime.now(timezone.utc).isoformat()
+    async with aiosqlite.connect(DB_PATH) as db:
+        cur = await db.execute(
+            "INSERT INTO tasks (project_name, title, position, created_at) VALUES (?,?,?,?)",
+            (name, task.title.strip(), task.position, now)
+        )
+        await db.commit()
+        db.row_factory = aiosqlite.Row
+        row = await (await db.execute("SELECT * FROM tasks WHERE id=?", (cur.lastrowid,))).fetchone()
+        return dict(row) if row else {"id": cur.lastrowid}
+
+@app.patch("/api/projects/{name}/tasks/{task_id}")
+async def update_task(name: str, task_id: int, update: TaskUpdate):
+    now = datetime.now(timezone.utc).isoformat()
+    async with aiosqlite.connect(DB_PATH) as db:
+        if update.done is not None:
+            done_at = now if update.done else ""
+            await db.execute(
+                "UPDATE tasks SET done=?, done_at=? WHERE id=? AND project_name=?",
+                (1 if update.done else 0, done_at, task_id, name)
+            )
+        if update.title is not None:
+            await db.execute(
+                "UPDATE tasks SET title=? WHERE id=? AND project_name=?",
+                (update.title.strip(), task_id, name)
+            )
+        if update.position is not None:
+            await db.execute(
+                "UPDATE tasks SET position=? WHERE id=? AND project_name=?",
+                (update.position, task_id, name)
+            )
+        await db.commit()
+    return {"ok": True}
+
+
+@app.delete("/api/projects/{name}/tasks/{task_id}")
+async def delete_task(name: str, task_id: int):
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute("DELETE FROM tasks WHERE id=? AND project_name=?", (task_id, name))
         await db.commit()
     return {"ok": True}
 
