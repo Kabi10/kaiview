@@ -1129,6 +1129,57 @@ async def get_sessions(name: str):
         return [dict(r) for r in rows]
 
 
+@app.get("/api/projects/{name}/git-log")
+async def get_git_log(name: str, limit: int = 30):
+    path = _find_project_path(name)
+    if not path:
+        return []
+    def _log():
+        try:
+            result = subprocess.run(
+                ["git", "log", f"--max-count={limit}",
+                 "--pretty=format:%H|%s|%an|%ai|%D"],
+                cwd=str(path), capture_output=True, text=True, timeout=5
+            )
+            entries = []
+            for line in result.stdout.strip().splitlines():
+                parts = line.split("|", 4)
+                if len(parts) < 4:
+                    continue
+                entries.append({
+                    "hash":    parts[0][:7],
+                    "message": parts[1],
+                    "author":  parts[2],
+                    "date":    parts[3],
+                    "refs":    parts[4] if len(parts) > 4 else "",
+                })
+            return entries
+        except Exception:
+            return []
+    return await asyncio.to_thread(_log)
+
+@app.get("/api/projects/{name}/changed-files")
+async def get_changed_files(name: str):
+    path = _find_project_path(name)
+    if not path:
+        return []
+    def _changed():
+        try:
+            result = subprocess.run(
+                ["git", "diff", "--name-status", "HEAD"],
+                cwd=str(path), capture_output=True, text=True, timeout=5
+            )
+            files = []
+            for line in result.stdout.strip().splitlines():
+                parts = line.split("\t", 1)
+                if len(parts) == 2:
+                    files.append({"status": parts[0], "file": parts[1]})
+            return files
+        except Exception:
+            return []
+    return await asyncio.to_thread(_changed)
+
+
 @app.get("/api/projects/{name}/journal")
 async def get_journal(name: str):
     async with aiosqlite.connect(DB_PATH) as db:
