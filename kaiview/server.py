@@ -1220,6 +1220,51 @@ async def delete_task(name: str, task_id: int):
     return {"ok": True}
 
 
+# ── Worklog ───────────────────────────────────────────────────────────────────
+
+_WORKLOG_PATH = _KAIVIEW_DIR / "worklog.jsonl"
+
+@app.post("/api/worklog")
+async def append_worklog(request: Request):
+    entry = await request.json()
+    line = json.dumps(entry, ensure_ascii=False)
+    async with aiosqlite.connect(DB_PATH):  # just to ensure dir exists
+        pass
+    with open(_WORKLOG_PATH, "a", encoding="utf-8") as f:
+        f.write(line + "\n")
+    return {"ok": True}
+
+@app.get("/api/worklog")
+async def get_worklog(project: str = "", limit: int = 50):
+    if not _WORKLOG_PATH.exists():
+        return []
+    lines = _WORKLOG_PATH.read_text(encoding="utf-8").strip().splitlines()
+    entries = []
+    for line in reversed(lines):
+        try:
+            e = json.loads(line)
+            if project and e.get("project") != project:
+                continue
+            entries.append(e)
+            if len(entries) >= limit:
+                break
+        except Exception:
+            continue
+    return entries
+
+@app.delete("/api/worklog")
+async def clear_worklog(project: str = ""):
+    if not _WORKLOG_PATH.exists():
+        return {"ok": True}
+    if not project:
+        _WORKLOG_PATH.write_text("", encoding="utf-8")
+    else:
+        lines = _WORKLOG_PATH.read_text(encoding="utf-8").strip().splitlines()
+        kept = [l for l in lines if json.loads(l).get("project") != project]
+        _WORKLOG_PATH.write_text("\n".join(kept) + ("\n" if kept else ""), encoding="utf-8")
+    return {"ok": True}
+
+
 @app.get("/api/projects/{name}/ai-logs")
 async def get_ai_logs(name: str):
     async with aiosqlite.connect(DB_PATH) as db:
