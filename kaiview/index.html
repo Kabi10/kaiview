@@ -394,6 +394,16 @@ body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;font-
     <button class="sb-btn" onclick="setFilter('ai:ChatGPT',this)">🟢 ChatGPT <span class="sb-cnt" id="cnt-chatgpt">0</span></button>
     <button class="sb-btn" onclick="setFilter('ai:None',this)">⚪ Unassigned <span class="sb-cnt" id="cnt-ai-none">0</span></button>
   </div>
+
+  <div class="sb-sec" id="worklog-panel">
+    <div class="sb-lbl" style="display:flex;justify-content:space-between;align-items:center">
+      <span>⚡ Recent Activity</span>
+      <span id="worklog-dot" style="width:7px;height:7px;border-radius:50%;background:var(--dimmer);display:inline-block" title="Live"></span>
+    </div>
+    <div id="worklog-feed" style="font-size:11px;color:var(--dim);display:flex;flex-direction:column;gap:3px;max-height:240px;overflow-y:auto">
+      <span style="color:var(--dimmer);font-style:italic">No activity yet</span>
+    </div>
+  </div>
 </aside>
 
 <!-- ── MAIN ── -->
@@ -1564,6 +1574,52 @@ document.querySelectorAll('.overlay').forEach(el=>{
 document.getElementById('cmd-overlay').addEventListener('click', e=>{
   if(e.target===document.getElementById('cmd-overlay')) closeCmd();
 });
+
+
+// ── Worklog feed ─────────────────────────────────────────────────────────────
+const ACTION_ICONS = {
+  edit:   '✏',
+  write:  '📝',
+  bash:   '⚡',
+  stop:   '🛑',
+  start:  '▶',
+  commit: '📦',
+  task:   '✅',
+};
+
+function _reltime(ts) {
+  const diff = Math.floor((Date.now() - new Date(ts).getTime()) / 1000);
+  if (diff < 60)  return `${diff}s ago`;
+  if (diff < 3600) return `${Math.floor(diff/60)}m ago`;
+  return `${Math.floor(diff/3600)}h ago`;
+}
+
+async function loadWorklog() {
+  try {
+    const entries = await fetch('/api/worklog?limit=30').then(r => r.json());
+    const feed = document.getElementById('worklog-feed');
+    const dot  = document.getElementById('worklog-dot');
+    if (!feed) return;
+    if (!entries.length) {
+      feed.innerHTML = '<span style="color:var(--dimmer);font-style:italic">No activity yet</span>';
+      dot.style.background = 'var(--dimmer)';
+      return;
+    }
+    dot.style.background = 'var(--green)';
+    feed.innerHTML = entries.map(e => {
+      const icon   = ACTION_ICONS[e.action] || '•';
+      const detail = esc(e.detail || '');
+      const proj   = e.project ? `<span style="color:var(--accent);margin-right:3px">${esc(e.project)}</span>` : '';
+      const time   = `<span style="color:var(--dimmer);float:right">${_reltime(e.ts)}</span>`;
+      return `<div style="padding:3px 0;border-bottom:1px solid var(--border);line-height:1.4">
+        ${time}${icon} ${proj}<span style="word-break:break-all">${detail}</span>
+      </div>`;
+    }).join('');
+  } catch(e) { /* server may not be ready */ }
+}
+
+loadWorklog();
+setInterval(loadWorklog, 10000);
 
 // ── Boot ───────────────────────────────────────────────────────────
 connectWS();
